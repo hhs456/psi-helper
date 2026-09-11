@@ -392,6 +392,32 @@ export default function SalesPage() {
 
   async function updateStatus(id: string, status: "pending" | "completed" | "cancelled") {
     const supabase = createClient();
+    const order = orders.find((o) => o.id === id);
+
+    if (status === "cancelled" && order) {
+      const items = (order.sales_items || []) as any[];
+      const reference = order.customer_name || order.client_code;
+
+      for (const item of items) {
+        const variant = variants.find((v) => v.id === item.color_variant_id);
+        if (variant) {
+          await supabase
+            .from("color_variants")
+            .update({ sold: variant.sold - item.quantity })
+            .eq("id", variant.id);
+
+          await supabase.from("stock_logs").insert([
+            {
+              color_variant_id: variant.id,
+              type: "sale",
+              quantity: item.quantity,
+              reference: `${reference} (取消訂單)`,
+            },
+          ]);
+        }
+      }
+    }
+
     const { error } = await supabase
       .from("sales_orders")
       .update({ status })
