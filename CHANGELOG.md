@@ -9,9 +9,11 @@
 
 ### 修復
 
-- **排序位置改變 BUG（再次修復）**：修復拖曳排序後記錄庫存異動時，`sort_order` 被覆寫為舊值導致排序位置改變的問題
-  - 更新庫存時不再寫入 `sort_order` 和 `is_pinned` 欄位，避免前端 state 中的舊值覆蓋 DB 中的新值
-  - 影響的函式：`addStockLog`、`deleteStockLog`、`handleCreateOrder`、`handleUpdateOrder`、`updateStatus`、`handleDelete`
+- **排序位置改變 BUG**：全面修復各種操作導致 `sort_order` 被錯誤覆寫的問題
+  - 拖曳排序後 React state 同步：拖曳完成後同步更新 state 中的 `sort_order`，確保後續操作拿到正確值
+  - 庫存異動：不再寫入 `sort_order`/`is_pinned`，只更新庫存欄位（`addStockLog`、`deleteStockLog`、銷售頁 4 處更新）
+  - 編輯款式/商品/供應商：不再寫入 `sort_order`/`is_pinned`，只更新表單欄位（`editVariant`、商品頁編輯、供應商頁編輯、供應商詳情編輯）
+  - 取消釘選：保留原本的 `sort_order` 不變，不再強制設為 `0`（`handlePinVariant`、`handlePin` x3）
 
 ## [0.6.0] - 2026-09-11
 
