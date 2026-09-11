@@ -177,7 +177,8 @@ export default function ProductsPage() {
             )
           `)
           .order("is_pinned", { ascending: false })
-          .order("sort_order", { ascending: false }),
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true }),
         supabase.from("suppliers").select("*").order("name"),
       ]);
 
@@ -293,7 +294,11 @@ export default function ProductsPage() {
         return;
       }
     } else {
-      const { error } = await supabase.from("products").insert([productData]);
+      const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
+      const { error } = await supabase.from("products").insert([{
+        ...productData,
+        sort_order: maxOrder + 1,
+      }]);
 
       if (error) {
         alert("新增失敗：" + error.message);

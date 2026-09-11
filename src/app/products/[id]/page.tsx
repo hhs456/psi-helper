@@ -224,7 +224,8 @@ export default function ProductDetailPage() {
           .select("*")
           .eq("product_id", productId)
           .order("is_pinned", { ascending: false })
-          .order("sort_order", { ascending: false }),
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true }),
         supabase.from("sales_orders").select("client_code"),
       ]);
 
@@ -234,12 +235,6 @@ export default function ProductDetailPage() {
 
       setProduct(productRes.data);
       setVariants(variantsRes.data || []);
-
-      // DEBUG: 追蹤 fetchData 回來的排序
-      console.log("[SORT_DEBUG] === fetchData variants order ===");
-      (variantsRes.data || []).forEach((v, i) => {
-        console.log(`[SORT_DEBUG]   [${i}] ${v.color} | pinned=${v.is_pinned} | sort_order=${v.sort_order}`);
-      });
 
       const variantIds = (variantsRes.data || []).map((v) => v.id);
       let logsRes;
@@ -286,11 +281,14 @@ export default function ProductDetailPage() {
     e.preventDefault();
     const supabase = createClient();
 
+    const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
+
     const { error } = await supabase.from("color_variants").insert([
       {
         product_id: productId,
         color: colorForm.color,
         size: colorForm.size || null,
+        sort_order: maxOrder + 1,
       },
     ]);
 
@@ -309,13 +307,16 @@ export default function ProductDetailPage() {
     e.preventDefault();
     const supabase = createClient();
 
-    const insertData: { product_id: string; color: string; size: string | null }[] = [];
+    const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
+
+    const insertData: { product_id: string; color: string; size: string | null; sort_order: number }[] = [];
     
     if (sizeForm.color) {
       insertData.push({
         product_id: productId,
         color: sizeForm.color,
         size: sizeForm.size || null,
+        sort_order: maxOrder + 1,
       });
     }
 
@@ -361,21 +362,6 @@ export default function ProductDetailPage() {
       updateData.sold = selectedVariant.sold + logForm.quantity;
     }
 
-    // DEBUG: 追蹤 sort_order 變化
-    console.log("[SORT_DEBUG] === addStockLog ===");
-    console.log("[SORT_DEBUG] variant:", selectedVariant.id, selectedVariant.color);
-    console.log("[SORT_DEBUG] local state sort_order:", selectedVariant.sort_order);
-    console.log("[SORT_DEBUG] local state is_pinned:", selectedVariant.is_pinned);
-    console.log("[SORT_DEBUG] update payload:", JSON.stringify(updateData));
-
-    // 先查詢 DB 中目前的 sort_order
-    const { data: dbVariantBefore } = await supabase
-      .from("color_variants")
-      .select("id, sort_order, is_pinned, purchased, defective, sold")
-      .eq("id", selectedVariant.id)
-      .single();
-    console.log("[SORT_DEBUG] DB before update:", JSON.stringify(dbVariantBefore));
-
     const { error: updateError } = await supabase
       .from("color_variants")
       .update(updateData)
@@ -385,14 +371,6 @@ export default function ProductDetailPage() {
       alert("更新失敗：" + updateError.message);
       return;
     }
-
-    // 查詢 DB 更新後的 sort_order
-    const { data: dbVariantAfter } = await supabase
-      .from("color_variants")
-      .select("id, sort_order, is_pinned, purchased, defective, sold")
-      .eq("id", selectedVariant.id)
-      .single();
-    console.log("[SORT_DEBUG] DB after update:", JSON.stringify(dbVariantAfter));
 
     if (logForm.type === "sale") {
       const { data: orderData, error: orderError } = await supabase

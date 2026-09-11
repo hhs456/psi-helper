@@ -136,8 +136,9 @@ export default function SuppliersPage() {
       const { data, error } = await supabase
         .from("suppliers")
         .select("*")
-        .order("is_pinned", { ascending: false })
-        .order("sort_order", { ascending: false });
+.order("is_pinned", { ascending: false })
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true });
 
       if (error) throw error;
       setSuppliers(data || []);
@@ -184,7 +185,11 @@ export default function SuppliersPage() {
         return;
       }
     } else {
-      const { error } = await supabase.from("suppliers").insert([formData]);
+      const maxOrder = Math.max(...suppliers.map((s) => s.sort_order), 0);
+      const { error } = await supabase.from("suppliers").insert([{
+        ...formData,
+        sort_order: maxOrder + 1,
+      }]);
 
       if (error) {
         alert("新增失敗：" + error.message);
