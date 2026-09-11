@@ -867,12 +867,11 @@ export default function ProductDetailPage() {
           )}
 
           <Input
-            label="備註/參考（選填）"
+            label="備註（選填）"
             value={logForm.reference}
             onChange={(e) =>
               setLogForm({ ...logForm, reference: e.target.value })
             }
-            placeholder={logForm.type === "sale" ? "例如：蝦皮訂單號" : "例如：供應商名稱"}
           />
 
           <div className="flex gap-2 justify-end pt-4">
