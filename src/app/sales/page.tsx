@@ -432,31 +432,35 @@ export default function SalesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("確定要刪除此銷售訂單嗎？庫存數量也會一併回復。")) return;
+    if (!confirm("確定要刪除此銷售訂單嗎？")) return;
 
     const supabase = createClient();
     const order = orders.find((o) => o.id === id);
     if (!order) return;
 
-    const items = (order.sales_items || []) as any[];
-    const reference = order.customer_name || order.client_code;
+    const shouldRevert = order.status !== "cancelled";
 
-    for (const item of items) {
-      const variant = variants.find((v) => v.id === item.color_variant_id);
-      if (variant) {
-        await supabase
-          .from("color_variants")
-          .update({ sold: variant.sold - item.quantity })
-          .eq("id", variant.id);
+    if (shouldRevert) {
+      const items = (order.sales_items || []) as any[];
+      const reference = order.customer_name || order.client_code;
 
-        await supabase.from("stock_logs").insert([
-          {
-            color_variant_id: variant.id,
-            type: "sale",
-            quantity: item.quantity,
-            reference: `${reference} (刪除訂單)`,
-          },
-        ]);
+      for (const item of items) {
+        const variant = variants.find((v) => v.id === item.color_variant_id);
+        if (variant) {
+          await supabase
+            .from("color_variants")
+            .update({ sold: variant.sold - item.quantity })
+            .eq("id", variant.id);
+
+          await supabase.from("stock_logs").insert([
+            {
+              color_variant_id: variant.id,
+              type: "sale",
+              quantity: item.quantity,
+              reference: `${reference} (刪除訂單)`,
+            },
+          ]);
+        }
       }
     }
 
