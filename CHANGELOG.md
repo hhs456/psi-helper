@@ -5,6 +5,20 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.8.0] - 2026-09-11
+
+### 效能優化
+
+- **頁面改為 Server Component**：所有主要頁面（首頁、商品、銷售、供應商、報表）改為 Server Component，資料在伺服器端預先載入，消除頁面切換時的 loading spinner
+- **新增骨架屏 loading.tsx**：每個頁面新增 `loading.tsx`，在資料載入時顯示骨架屏動畫，提供更流暢的載入體驗
+- **圖片優化**：使用 Next.js `<Image>` 元件取代原生 `<img>`，自動進行圖片 lazy loading 和格式優化
+- **Next.js Image 配置**：設定 `next.config.ts` 允許 Supabase Storage 域名
+
+### 架構改進
+
+- 將頁面資料抓取邏輯移至 Server Component，互動功能拆分為獨立的 Client Component
+- 新增 Client Components：`HomeClient`、`ProductsClient`、`SalesClient`、`SuppliersClient`
+
 ## [0.7.0] - 2026-09-11
 
 ### UX 改善

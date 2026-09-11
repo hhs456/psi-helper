@@ -1,76 +1,49 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { TrendingUp, Package, ShoppingCart, DollarSign } from "lucide-react";
-import type { InventorySummary } from "@/types";
 
-export default function ReportsPage() {
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    totalStock: 0,
-    totalSales: 0,
-    totalRevenue: 0,
-  });
-  const [loading, setLoading] = useState(true);
+export default async function ReportsPage() {
+  const supabase = await createClient();
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  const [productsRes, variantsRes, salesRes] = await Promise.all([
+    supabase.from("products").select("id", { count: "exact" }),
+    supabase.from("color_variants").select("purchased, defective, sold"),
+    supabase
+      .from("sales_orders")
+      .select("total_amount")
+      .eq("status", "completed"),
+  ]);
 
-  async function fetchStats() {
-    try {
-      const supabase = createClient();
-
-      const [productsRes, variantsRes, salesRes] = await Promise.all([
-        supabase.from("products").select("id", { count: "exact" }),
-        supabase.from("color_variants").select("purchased, defective, sold"),
-        supabase
-          .from("sales_orders")
-          .select("total_amount")
-          .eq("status", "completed"),
-      ]);
-
-      if (productsRes.error) throw productsRes.error;
-      if (variantsRes.error) throw variantsRes.error;
-      if (salesRes.error) throw salesRes.error;
-
-      const totalStock = (variantsRes.data || []).reduce(
-        (sum, v) => sum + (v.purchased - v.defective - v.sold),
-        0
-      );
-
-      const totalSales = (variantsRes.data || []).reduce(
-        (sum, v) => sum + v.sold,
-        0
-      );
-
-      const totalRevenue = (salesRes.data || []).reduce(
-        (sum, s) => sum + Number(s.total_amount),
-        0
-      );
-
-      setStats({
-        totalProducts: productsRes.count || 0,
-        totalStock,
-        totalSales,
-        totalRevenue,
-      });
-    } catch (err) {
-      console.error("Error fetching stats:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (loading) {
+  if (productsRes.error || variantsRes.error || salesRes.error) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">報表分析</h1>
+        <div className="text-red-500">載入失敗</div>
       </div>
     );
   }
+
+  const totalStock = (variantsRes.data || []).reduce(
+    (sum: number, v: { purchased: number; defective: number; sold: number }) => sum + (v.purchased - v.defective - v.sold),
+    0
+  );
+
+  const totalSales = (variantsRes.data || []).reduce(
+    (sum: number, v: { sold: number }) => sum + v.sold,
+    0
+  );
+
+  const totalRevenue = (salesRes.data || []).reduce(
+    (sum: number, s: { total_amount: number | string }) => sum + Number(s.total_amount),
+    0
+  );
+
+  const stats = {
+    totalProducts: productsRes.count || 0,
+    totalStock,
+    totalSales,
+    totalRevenue,
+  };
 
   const statCards = [
     {
