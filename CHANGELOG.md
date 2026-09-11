@@ -5,7 +5,7 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
-## [0.4.0] - 2026-09-11
+## [0.5.0] - 2026-09-11
 
 ### 新增功能
 
@@ -13,13 +13,6 @@
   - 釘選的項目會顯示橙色邊框和背景，優先顯示在列表最上方
   - 同一群組（釘選/未釘選）內可用上下箭頭調整順序
   - 資料庫增加 `sort_order` 和 `is_pinned` 欄位
-- **供應商詳情頁新增商品**：在供應商商品列表頁可直接新增商品，無需切換到商品管理頁
-
-### 改進
-
-- **記錄銷售表單簡化**：客戶編號、客戶名稱、單價等欄位預設折疊，可展開查看，與進貨/瑕疵操作一致
-- **異動記錄區塊折疊**：商品詳情頁的異動記錄預設收合，點擊標題展開
-- **圖示優化**：商品管理和供應商列表的「進入詳情」圖示從眼睛改為 ExternalLink，更直覺表示前往另一頁
 
 ### 資料遷移
 
@@ -40,6 +33,18 @@ CREATE INDEX IF NOT EXISTS idx_products_sort ON products (is_pinned DESC, sort_o
 CREATE INDEX IF NOT EXISTS idx_suppliers_sort ON suppliers (is_pinned DESC, sort_order DESC);
 CREATE INDEX IF NOT EXISTS idx_color_variants_sort ON color_variants (is_pinned DESC, sort_order DESC);
 ```
+
+## [0.4.0] - 2026-09-11
+
+### 新增功能
+
+- **供應商詳情頁新增商品**：在供應商商品列表頁可直接新增商品，無需切換到商品管理頁
+
+### 改進
+
+- **記錄銷售表單簡化**：客戶編號、客戶名稱、單價等欄位預設折疊，可展開查看，與進貨/瑕疵操作一致
+- **異動記錄區塊折疊**：商品詳情頁的異動記錄預設收合，點擊標題展開
+- **圖示優化**：商品管理和供應商列表的「進入詳情」圖示從眼睛改為 ExternalLink，更直覺表示前往另一頁
 
 ## [0.3.1] - 2026-09-11
 
