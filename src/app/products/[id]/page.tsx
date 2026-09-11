@@ -32,11 +32,14 @@ export default function ProductDetailPage() {
   const [stockLogs, setStockLogs] = useState<StockLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
+  const [isAddColorModalOpen, setIsAddColorModalOpen] = useState(false);
+  const [isAddSizeModalOpen, setIsAddSizeModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ColorVariant | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
 
-  const [variantForm, setVariantForm] = useState({ color: "", size: "" });
+  const [colorForm, setColorForm] = useState({ color: "", size: "" });
+  const [sizeForm, setSizeForm] = useState({ size: "", color: "" });
   const [logForm, setLogForm] = useState({
     type: "purchase" as "purchase" | "defect" | "sale",
     quantity: 0,
@@ -69,8 +72,10 @@ export default function ProductDetailPage() {
   const sizeOrder = Object.keys(variantsBySize).sort((a, b) => {
     if (a === "均碼") return 1;
     if (b === "均碼") return -1;
-    return a.localeCompare(b);
+    return a.localeCompare(b, "zh-Hant-TW");
   });
+
+  const availableSizes = ["XS", "S", "M", "L", "XL", "2L", "3L", "4L", "均碼"];
 
   useEffect(() => {
     if (productId) {
@@ -140,15 +145,15 @@ export default function ProductDetailPage() {
     }
   }
 
-  async function addVariant(e: React.FormEvent) {
+  async function addColor(e: React.FormEvent) {
     e.preventDefault();
     const supabase = createClient();
 
     const { error } = await supabase.from("color_variants").insert([
       {
         product_id: productId,
-        color: variantForm.color,
-        size: variantForm.size || null,
+        color: colorForm.color,
+        size: colorForm.size || null,
       },
     ]);
 
@@ -157,8 +162,36 @@ export default function ProductDetailPage() {
       return;
     }
 
-    setVariantForm({ color: "", size: "" });
-    setIsVariantModalOpen(false);
+    setColorForm({ color: "", size: "" });
+    setIsAddColorModalOpen(false);
+    setSelectedSize(null);
+    fetchData();
+  }
+
+  async function addSize(e: React.FormEvent) {
+    e.preventDefault();
+    const supabase = createClient();
+
+    const insertData: { product_id: string; color: string; size: string | null }[] = [];
+    
+    if (sizeForm.color) {
+      insertData.push({
+        product_id: productId,
+        color: sizeForm.color,
+        size: sizeForm.size || null,
+      });
+    }
+
+    if (insertData.length > 0) {
+      const { error } = await supabase.from("color_variants").insert(insertData);
+      if (error) {
+        alert("新增失敗：" + error.message);
+        return;
+      }
+    }
+
+    setSizeForm({ size: "", color: "" });
+    setIsAddSizeModalOpen(false);
     fetchData();
   }
 
@@ -279,7 +312,7 @@ export default function ProductDetailPage() {
   }
 
   async function deleteVariant(variantId: string) {
-    if (!confirm("確定要刪除此顏色/款式嗎？相關的庫存記錄也會一併刪除。")) return;
+    if (!confirm("確定要刪除此款式嗎？相關的庫存記錄也會一併刪除。")) return;
 
     const supabase = createClient();
     const { error } = await supabase
@@ -376,19 +409,19 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Color Variants */}
+      {/* Color Variants by Size */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">顏色/款式</h2>
-          <Button size="sm" onClick={() => setIsVariantModalOpen(true)}>
+          <h2 className="text-lg font-semibold text-gray-900">款式</h2>
+          <Button size="sm" onClick={() => setIsAddSizeModalOpen(true)}>
             <Plus size={16} className="mr-1" />
-            新增顏色
+            新增尺寸
           </Button>
         </div>
 
         {variants.length === 0 ? (
           <Card className="p-6 text-center text-gray-500">
-            尚無顏色/款式資料
+            尚無款式資料
           </Card>
         ) : (
           <div className="space-y-4">
@@ -408,8 +441,8 @@ export default function ProductDetailPage() {
                       ) : (
                         <ChevronRight size={18} className="text-gray-500" />
                       )}
-                      <span className="font-semibold text-gray-900">{size}</span>
-                      <span className="text-sm text-gray-500">({sizeVariants.length} 款)</span>
+                      <span className="font-semibold text-gray-900">尺寸：{size}</span>
+                      <span className="text-sm text-gray-500">({sizeVariants.length} 色)</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <span className="text-gray-600">
@@ -421,65 +454,79 @@ export default function ProductDetailPage() {
                     </div>
                   </button>
                   {isExpanded && (
-                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {sizeVariants.map((variant) => {
-                        const available = variant.purchased - variant.defective - variant.sold;
-                        return (
-                          <Card key={variant.id} className="p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="font-semibold text-gray-900">
-                                {variant.color}
-                              </h3>
-                              <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => {
-                                    setSelectedVariant(variant);
-                                    setIsLogModalOpen(true);
-                                  }}
-                                >
-                                  記錄
-                                </Button>
-                                <button
-                                  onClick={() => deleteVariant(variant.id)}
-                                  className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                >
-                                  <Trash2 size={14} className="text-red-500" />
-                                </button>
+                    <div className="p-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                        {sizeVariants.map((variant) => {
+                          const available = variant.purchased - variant.defective - variant.sold;
+                          return (
+                            <Card key={variant.id} className="p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <h3 className="font-semibold text-gray-900">
+                                  {variant.color}
+                                </h3>
+                                <div className="flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => {
+                                      setSelectedVariant(variant);
+                                      setIsLogModalOpen(true);
+                                    }}
+                                  >
+                                    記錄
+                                  </Button>
+                                  <button
+                                    onClick={() => deleteVariant(variant.id)}
+                                    className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                                  >
+                                    <Trash2 size={14} className="text-red-500" />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                            <div className="grid grid-cols-4 gap-2 text-center">
-                              <div>
-                                <p className="text-lg font-bold">{variant.purchased}</p>
-                                <p className="text-xs text-gray-500">進貨</p>
+                              <div className="grid grid-cols-4 gap-2 text-center">
+                                <div>
+                                  <p className="text-lg font-bold">{variant.purchased}</p>
+                                  <p className="text-xs text-gray-500">進貨</p>
+                                </div>
+                                <div>
+                                  <p className="text-lg font-bold text-yellow-600">
+                                    {variant.defective}
+                                  </p>
+                                  <p className="text-xs text-gray-500">瑕疵</p>
+                                </div>
+                                <div>
+                                  <p className="text-lg font-bold text-red-600">
+                                    {variant.sold}
+                                  </p>
+                                  <p className="text-xs text-gray-500">已售</p>
+                                </div>
+                                <div>
+                                  <p
+                                    className={`text-lg font-bold ${
+                                      available > 0 ? "text-green-600" : "text-red-600"
+                                    }`}
+                                  >
+                                    {available}
+                                  </p>
+                                  <p className="text-xs text-gray-500">庫存</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-lg font-bold text-yellow-600">
-                                  {variant.defective}
-                                </p>
-                                <p className="text-xs text-gray-500">瑕疵</p>
-                              </div>
-                              <div>
-                                <p className="text-lg font-bold text-red-600">
-                                  {variant.sold}
-                                </p>
-                                <p className="text-xs text-gray-500">已售</p>
-                              </div>
-                              <div>
-                                <p
-                                  className={`text-lg font-bold ${
-                                    available > 0 ? "text-green-600" : "text-red-600"
-                                  }`}
-                                >
-                                  {available}
-                                </p>
-                                <p className="text-xs text-gray-500">庫存</p>
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
+                            </Card>
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSize(size);
+                          setColorForm({ color: "", size: size === "均碼" ? "" : size });
+                          setIsAddColorModalOpen(true);
+                        }}
+                        className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 transition-colors"
+                      >
+                        <Plus size={14} className="inline mr-1" />
+                        新增顏色
+                      </button>
                     </div>
                   )}
                 </div>
@@ -560,34 +607,92 @@ export default function ProductDetailPage() {
         )}
       </div>
 
-      {/* Add Variant Modal */}
+      {/* Add Color Modal */}
       <Modal
-        isOpen={isVariantModalOpen}
-        onClose={() => setIsVariantModalOpen(false)}
-        title="新增顏色/款式"
+        isOpen={isAddColorModalOpen}
+        onClose={() => {
+          setIsAddColorModalOpen(false);
+          setSelectedSize(null);
+          setColorForm({ color: "", size: "" });
+        }}
+        title={`新增顏色${selectedSize ? ` - 尺寸：${selectedSize}` : ""}`}
       >
-        <form onSubmit={addVariant} className="space-y-4">
+        <form onSubmit={addColor} className="space-y-4">
           <Input
             label="顏色"
-            value={variantForm.color}
+            value={colorForm.color}
             onChange={(e) =>
-              setVariantForm({ ...variantForm, color: e.target.value })
+              setColorForm({ ...colorForm, color: e.target.value })
             }
             required
           />
           <Input
-            label="尺寸（選填）"
-            value={variantForm.size}
+            label="尺寸"
+            value={colorForm.size}
             onChange={(e) =>
-              setVariantForm({ ...variantForm, size: e.target.value })
+              setColorForm({ ...colorForm, size: e.target.value })
             }
-            placeholder="例如：均碼、S、M、L"
+            placeholder="例如：S、M、L、均碼"
           />
           <div className="flex gap-2 justify-end pt-4">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setIsVariantModalOpen(false)}
+              onClick={() => {
+                setIsAddColorModalOpen(false);
+                setSelectedSize(null);
+                setColorForm({ color: "", size: "" });
+              }}
+            >
+              取消
+            </Button>
+            <Button type="submit">新增</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Add Size Modal */}
+      <Modal
+        isOpen={isAddSizeModalOpen}
+        onClose={() => {
+          setIsAddSizeModalOpen(false);
+          setSizeForm({ size: "", color: "" });
+        }}
+        title="新增尺寸"
+      >
+        <form onSubmit={addSize} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              尺寸
+            </label>
+            <select
+              value={sizeForm.size}
+              onChange={(e) => setSizeForm({ ...sizeForm, size: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              required
+            >
+              <option value="">選擇尺寸</option>
+              {availableSizes.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Input
+            label="顏色（選填，可後續新增）"
+            value={sizeForm.color}
+            onChange={(e) => setSizeForm({ ...sizeForm, color: e.target.value })}
+            placeholder="例如：紅色、藍色"
+          />
+          <div className="flex gap-2 justify-end pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsAddSizeModalOpen(false);
+                setSizeForm({ size: "", color: "" });
+              }}
             >
               取消
             </Button>
