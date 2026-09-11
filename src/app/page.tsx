@@ -8,7 +8,6 @@ export default async function Home() {
   cacheLife("minutes");
 
   const supabase = await createClient();
-
   const { data, error } = await supabase
     .from("color_variants")
     .select(`
