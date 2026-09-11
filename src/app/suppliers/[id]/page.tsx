@@ -14,7 +14,10 @@ import {
   Trash2,
   Warehouse,
   Package,
+  Plus,
+  X,
 } from "lucide-react";
+import { compressImage } from "@/lib/image";
 import type { Supplier, Product } from "@/types";
 
 interface ProductWithVariants extends Product {
@@ -37,7 +40,11 @@ export default function SupplierDetailPage() {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
+  const [productForm, setProductForm] = useState({ name: "", code: "", notes: "" });
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
+  const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (supplierId) {
@@ -123,13 +130,102 @@ export default function SupplierDetailPage() {
     router.push("/suppliers");
   }
 
+  function openAddProductModal() {
+    setProductForm({ name: "", code: "", notes: "" });
+    setProductImageFile(null);
+    setProductImagePreview(null);
+    setIsAddProductModalOpen(true);
+  }
+
+  function closeAddProductModal() {
+    setIsAddProductModalOpen(false);
+    setProductForm({ name: "", code: "", notes: "" });
+    setProductImageFile(null);
+    setProductImagePreview(null);
+  }
+
+  function handleProductImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProductImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProductImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  async function uploadProductImage(): Promise<string | null> {
+    if (!productImageFile) return null;
+
+    const supabase = createClient();
+
+    let fileToUpload: Blob = productImageFile;
+    try {
+      fileToUpload = await compressImage(productImageFile, {
+        maxWidth: 1200,
+        maxHeight: 1200,
+        quality: 0.8,
+      });
+    } catch (err) {
+      console.warn("Image compression failed, using original:", err);
+    }
+
+    const fileName = `${Date.now()}.jpg`;
+    const filePath = `${fileName}`;
+
+    const { error } = await supabase.storage
+      .from("product-images")
+      .upload(filePath, fileToUpload, {
+        contentType: "image/jpeg",
+      });
+
+    if (error) {
+      alert("圖片上傳失敗：" + error.message);
+      return null;
+    }
+
+    const { data } = supabase.storage.from("product-images").getPublicUrl(filePath);
+    return data.publicUrl;
+  }
+
+  async function handleAddProduct(e: React.FormEvent) {
+    e.preventDefault();
+    const supabase = createClient();
+
+    let imageUrl = productImagePreview;
+    if (productImageFile) {
+      const uploadedUrl = await uploadProductImage();
+      if (uploadedUrl) imageUrl = uploadedUrl;
+    }
+
+    const { error } = await supabase.from("products").insert([
+      {
+        name: productForm.name,
+        code: productForm.code || null,
+        notes: productForm.notes || null,
+        image_url: imageUrl,
+        supplier_id: supplierId,
+      },
+    ]);
+
+    if (error) {
+      alert("新增商品失敗：" + error.message);
+      return;
+    }
+
+    closeAddProductModal();
+    fetchData();
+  }
+
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => {
-    const variants = (p as any).variants || [];
+    const variants = p.variants || [];
     return (
       sum +
       variants.reduce(
-        (vSum: number, v: any) => vSum + (v.purchased - v.defective - v.sold),
+        (vSum, v) => vSum + (v.purchased - v.defective - v.sold),
         0
       )
     );
@@ -197,7 +293,13 @@ export default function SupplierDetailPage() {
       </div>
 
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">商品列表</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">商品列表</h2>
+          <Button size="sm" onClick={openAddProductModal}>
+            <Plus size={16} className="mr-1" />
+            新增商品
+          </Button>
+        </div>
 
         {products.length === 0 ? (
           <Card className="p-6 text-center text-gray-500">
@@ -206,9 +308,9 @@ export default function SupplierDetailPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {products.map((product) => {
-              const variants = (product as any).variants || [];
+              const variants = product.variants || [];
               const stock = variants.reduce(
-                (sum: number, v: any) => sum + (v.purchased - v.defective - v.sold),
+                (sum, v) => sum + (v.purchased - v.defective - v.sold),
                 0
               );
               return (
@@ -288,6 +390,78 @@ export default function SupplierDetailPage() {
               取消
             </Button>
             <Button type="submit">更新</Button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        isOpen={isAddProductModalOpen}
+        onClose={closeAddProductModal}
+        title="新增商品"
+      >
+        <form onSubmit={handleAddProduct} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              商品圖片
+            </label>
+            <div className="flex items-center gap-4">
+              {productImagePreview && (
+                <div className="relative">
+                  <img
+                    src={productImagePreview}
+                    alt="Preview"
+                    className="w-20 h-20 object-cover rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductImagePreview(null);
+                      setProductImageFile(null);
+                    }}
+                    className="absolute -top-2 -right-2 p-1 bg-white rounded-full shadow-md hover:bg-gray-100"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleProductImageChange}
+                className="text-sm"
+              />
+            </div>
+          </div>
+
+          <Input
+            label="商品名稱"
+            value={productForm.name}
+            onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+            required
+          />
+
+          <Input
+            label="商品編號"
+            value={productForm.code}
+            onChange={(e) => setProductForm({ ...productForm, code: e.target.value })}
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              備註
+            </label>
+            <textarea
+              value={productForm.notes}
+              onChange={(e) => setProductForm({ ...productForm, notes: e.target.value })}
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4">
+            <Button type="button" variant="secondary" onClick={closeAddProductModal}>
+              取消
+            </Button>
+            <Button type="submit">新增</Button>
           </div>
         </form>
       </Modal>

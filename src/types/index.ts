@@ -3,6 +3,8 @@ export interface Supplier {
   name: string
   contact: string | null
   notes: string | null
+  sort_order: number
+  is_pinned: boolean
   created_at: string
   updated_at: string
 }
@@ -14,6 +16,8 @@ export interface Product {
   code: string | null
   image_url: string | null
   notes: string | null
+  sort_order: number
+  is_pinned: boolean
   created_at: string
   updated_at: string
   supplier?: Supplier
@@ -27,6 +31,8 @@ export interface ColorVariant {
   purchased: number
   defective: number
   sold: number
+  sort_order: number
+  is_pinned: boolean
   created_at: string
   updated_at: string
   product?: Product

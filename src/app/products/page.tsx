@@ -8,15 +8,19 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Package, X, Eye } from "lucide-react";
-import type { Product, Supplier, ColorVariant } from "@/types";
+import { Plus, Edit2, Trash2, Package, X, ExternalLink, Pin, PinOff, ChevronUp, ChevronDown } from "lucide-react";
+import type { Product, Supplier } from "@/types";
+
+type ProductWithSupplier = Omit<Product, "supplier"> & {
+  supplier: Supplier | null;
+};
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductWithSupplier[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingProduct, setEditingProduct] = useState<ProductWithSupplier | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     code: "",
@@ -44,7 +48,8 @@ export default function ProductsPage() {
               name
             )
           `)
-          .order("created_at", { ascending: false }),
+          .order("is_pinned", { ascending: false })
+          .order("sort_order", { ascending: false }),
         supabase.from("suppliers").select("*").order("name"),
       ]);
 
@@ -60,7 +65,7 @@ export default function ProductsPage() {
     }
   }
 
-  function openModal(product?: Product) {
+  function openModal(product?: ProductWithSupplier) {
     if (product) {
       setEditingProduct(product);
       setFormData({
@@ -186,6 +191,75 @@ export default function ProductsPage() {
     fetchData();
   }
 
+  async function handlePin(id: string, currentIsPinned: boolean) {
+    const supabase = createClient();
+    const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
+    
+    const { error } = await supabase
+      .from("products")
+      .update({
+        is_pinned: !currentIsPinned,
+        sort_order: !currentIsPinned ? maxOrder + 1 : 0,
+      })
+      .eq("id", id);
+
+    if (error) {
+      alert("操作失敗：" + error.message);
+      return;
+    }
+
+    fetchData();
+  }
+
+  async function handleSort(id: string, direction: "up" | "down") {
+    const supabase = createClient();
+    const currentIndex = products.findIndex((p) => p.id === id);
+    if (currentIndex === -1) return;
+
+    const currentItem = products[currentIndex];
+    let targetItem: ProductWithSupplier | null = null;
+
+    if (direction === "up") {
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        if (products[i].is_pinned === currentItem.is_pinned) {
+          targetItem = products[i];
+          break;
+        }
+      }
+    } else {
+      for (let i = currentIndex + 1; i < products.length; i++) {
+        if (products[i].is_pinned === currentItem.is_pinned) {
+          targetItem = products[i];
+          break;
+        }
+      }
+    }
+
+    if (!targetItem) return;
+
+    const { error } = await supabase
+      .from("products")
+      .update({ sort_order: targetItem.sort_order })
+      .eq("id", id);
+
+    if (error) {
+      alert("排序失敗：" + error.message);
+      return;
+    }
+
+    const { error: error2 } = await supabase
+      .from("products")
+      .update({ sort_order: currentItem.sort_order })
+      .eq("id", targetItem.id);
+
+    if (error2) {
+      alert("排序失敗：" + error2.message);
+      return;
+    }
+
+    fetchData();
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -212,62 +286,97 @@ export default function ProductsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((product) => (
-            <Card key={product.id} className="overflow-hidden">
-              <div className="flex">
-                <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
-                  {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <Package className="text-gray-400" size={24} />
+          {products.map((product, index) => {
+            const canMoveUp = products.slice(0, index).some((p) => p.is_pinned === product.is_pinned);
+            const canMoveDown = products.slice(index + 1).some((p) => p.is_pinned === product.is_pinned);
+            
+            return (
+              <Card
+                key={product.id}
+                className={`overflow-hidden ${product.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+              >
+                <div className="flex">
+                  <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
+                    {product.image_url ? (
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <Package className="text-gray-400" size={24} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 p-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-semibold text-gray-900 text-sm">
+                          {product.name}
+                        </h3>
+                        {product.code && (
+                          <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
+                        )}
+                        {product.supplier?.name && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {product.supplier.name}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handlePin(product.id, product.is_pinned)}
+                          className="p-1 rounded hover:bg-gray-100"
+                          title={product.is_pinned ? "取消釘選" : "釘選"}
+                        >
+                          {product.is_pinned ? (
+                            <PinOff size={14} className="text-orange-500" />
+                          ) : (
+                            <Pin size={14} className="text-gray-400" />
+                          )}
+                        </button>
+                        <Link
+                          href={`/products/${product.id}`}
+                          className="p-1 rounded hover:bg-gray-100"
+                        >
+                          <ExternalLink size={14} className="text-blue-600" />
+                        </Link>
+                        <button
+                          onClick={() => openModal(product)}
+                          className="p-1 rounded hover:bg-gray-100"
+                        >
+                          <Edit2 size={14} className="text-gray-600" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(product.id)}
+                          className="p-1 rounded hover:bg-red-50"
+                        >
+                          <Trash2 size={14} className="text-red-500" />
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div className="flex-1 p-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-sm">
-                        {product.name}
-                      </h3>
-                      {product.code && (
-                        <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
-                      )}
-                      {(product as any).supplier?.name && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {(product as any).supplier.name}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-1">
-                      <Link
-                        href={`/products/${product.id}`}
-                        className="p-1 rounded hover:bg-gray-100"
-                      >
-                        <Eye size={14} className="text-blue-600" />
-                      </Link>
+                    <div className="flex justify-end gap-1 mt-2">
                       <button
-                        onClick={() => openModal(product)}
-                        className="p-1 rounded hover:bg-gray-100"
+                        onClick={() => handleSort(product.id, "up")}
+                        disabled={!canMoveUp}
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
-                        <Edit2 size={14} className="text-gray-600" />
+                        <ChevronUp size={14} className="text-gray-600" />
                       </button>
                       <button
-                        onClick={() => handleDelete(product.id)}
-                        className="p-1 rounded hover:bg-red-50"
+                        onClick={() => handleSort(product.id, "down")}
+                        disabled={!canMoveDown}
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
-                        <Trash2 size={14} className="text-red-500" />
+                        <ChevronDown size={14} className="text-gray-600" />
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 
