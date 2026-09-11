@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Package, X, ExternalLink, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, GripVertical, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -76,7 +76,7 @@ function SortableProductCard({
         >
           <GripVertical size={16} />
         </div>
-        <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
+        <Link href={`/products/${product.id}`} className="w-20 h-20 flex-shrink-0 bg-gray-100 block">
           {product.image_url ? (
             <img
               src={product.image_url}
@@ -88,7 +88,7 @@ function SortableProductCard({
               <Package className="text-gray-400" size={24} />
             </div>
           )}
-        </div>
+        </Link>
         <div className="flex-1 p-3">
           <div className="flex items-start justify-between">
             <div>
@@ -116,12 +116,6 @@ function SortableProductCard({
                   <Pin size={14} className="text-gray-400" />
                 )}
               </button>
-              <Link
-                href={`/products/${product.id}`}
-                className="p-1 rounded hover:bg-gray-100"
-              >
-                <ExternalLink size={14} className="text-blue-600" />
-              </Link>
               <button
                 onClick={() => onEdit(product)}
                 className="p-1 rounded hover:bg-gray-100"
