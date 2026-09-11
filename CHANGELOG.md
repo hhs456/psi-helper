@@ -16,6 +16,7 @@
   - 取消釘選：保留原本的 `sort_order` 不變，不再強制設為 `0`（`handlePinVariant`、`handlePin` x3）
 - **排序不確定性修復**：新增查詢加上 `created_at` 作為第三排序條件，避免相同 `sort_order` 值時順序隨機跳動
 - **新項目排序**：新增款式、商品、供應商時，給予遞增的 `sort_order`，不再全部為 `0`
+- **既有資料補償**：新增 migration `005_backfill_sort_order.sql`，為 `sort_order = 0` 的既有資料依 `created_at` 賦予遞增值
 
 ## [0.6.0] - 2026-09-11
 
