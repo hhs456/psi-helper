@@ -14,6 +14,8 @@
   - 庫存異動：不再寫入 `sort_order`/`is_pinned`，只更新庫存欄位（`addStockLog`、`deleteStockLog`、銷售頁 4 處更新）
   - 編輯款式/商品/供應商：不再寫入 `sort_order`/`is_pinned`，只更新表單欄位（`editVariant`、商品頁編輯、供應商頁編輯、供應商詳情編輯）
   - 取消釘選：保留原本的 `sort_order` 不變，不再強制設為 `0`（`handlePinVariant`、`handlePin` x3）
+- **排序不確定性修復**：新增查詢加上 `created_at` 作為第三排序條件，避免相同 `sort_order` 值時順序隨機跳動
+- **新項目排序**：新增款式、商品、供應商時，給予遞增的 `sort_order`，不再全部為 `0`
 
 ## [0.6.0] - 2026-09-11
 
