@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Warehouse, ExternalLink, Pin, PinOff, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Edit2, Trash2, Warehouse, ExternalLink, Pin, PinOff, GripVertical, Search } from "lucide-react";
 import type { Supplier } from "@/types";
 
 export default function SuppliersPage() {
@@ -16,6 +16,10 @@ export default function SuppliersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragNodeRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     fetchSuppliers();
@@ -121,54 +125,76 @@ export default function SuppliersPage() {
     fetchSuppliers();
   }
 
-  async function handleSort(id: string, direction: "up" | "down") {
-    const supabase = createClient();
-    const currentIndex = suppliers.findIndex((s) => s.id === id);
-    if (currentIndex === -1) return;
-
-    const currentItem = suppliers[currentIndex];
-    let targetItem: Supplier | null = null;
-
-    if (direction === "up") {
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        if (suppliers[i].is_pinned === currentItem.is_pinned) {
-          targetItem = suppliers[i];
-          break;
-        }
-      }
-    } else {
-      for (let i = currentIndex + 1; i < suppliers.length; i++) {
-        if (suppliers[i].is_pinned === currentItem.is_pinned) {
-          targetItem = suppliers[i];
-          break;
-        }
-      }
-    }
-
-    if (!targetItem) return;
-
-    const { error } = await supabase
-      .from("suppliers")
-      .update({ sort_order: targetItem.sort_order })
-      .eq("id", id);
-
-    if (error) {
-      alert("排序失敗：" + error.message);
-      return;
-    }
-
-    const { error: error2 } = await supabase
-      .from("suppliers")
-      .update({ sort_order: currentItem.sort_order })
-      .eq("id", targetItem.id);
-
-    if (error2) {
-      alert("排序失敗：" + error2.message);
-      return;
-    }
-
-    fetchSuppliers();
+  function handleDragStart(e: React.DragEvent, index: number) {
+    dragNodeRef.current = e.currentTarget as HTMLElement;
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
   }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragNodeRef.current && dragNodeRef.current !== e.currentTarget) {
+      setDragOverIndex(index);
+    }
+  }
+
+  function handleDragLeave() {
+    setDragOverIndex(null);
+  }
+
+  async function handleDrop(e: React.DragEvent, dropIndex: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === dropIndex) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const draggedItem = suppliers[dragIndex];
+    const targetItem = suppliers[dropIndex];
+
+    if (draggedItem.is_pinned !== targetItem.is_pinned) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newSuppliers = [...suppliers];
+    newSuppliers.splice(dragIndex, 1);
+    newSuppliers.splice(dropIndex, 0, draggedItem);
+
+    setSuppliers(newSuppliers);
+    setDragIndex(null);
+    setDragOverIndex(null);
+
+    const supabase = createClient();
+    const pinnedGroup = newSuppliers.filter((s) => s.is_pinned);
+    const unpinnedGroup = newSuppliers.filter((s) => !s.is_pinned);
+
+    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
+      id: item.id,
+      sort_order: newSuppliers.length - idx,
+    }));
+
+    for (const update of updates) {
+      await supabase
+        .from("suppliers")
+        .update({ sort_order: update.sort_order })
+        .eq("id", update.id);
+    }
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDragOverIndex(null);
+    dragNodeRef.current = null;
+  }
+
+  const filteredSuppliers = suppliers.filter((supplier) => {
+    const query = searchQuery.toLowerCase();
+    return supplier.name.toLowerCase().includes(query);
+  });
 
   if (loading) {
     return (
@@ -188,32 +214,64 @@ export default function SuppliersPage() {
         </Button>
       </div>
 
-      {suppliers.length === 0 ? (
+      <div className="mb-4">
+        <div className="relative">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="搜尋供應商名稱..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {filteredSuppliers.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <Warehouse size={48} className="mb-4" />
-          <p className="text-lg">尚無供應商資料</p>
-          <p className="text-sm mt-2">點擊上方按鈕新增第一個供應商</p>
+          <p className="text-lg">{suppliers.length === 0 ? "尚無供應商資料" : "找不到符合條件的供應商"}</p>
+          {suppliers.length === 0 && (
+            <p className="text-sm mt-2">點擊上方按鈕新增第一個供應商</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {suppliers.map((supplier, index) => {
-            const canMoveUp = suppliers.slice(0, index).some((s) => s.is_pinned === supplier.is_pinned);
-            const canMoveDown = suppliers.slice(index + 1).some((s) => s.is_pinned === supplier.is_pinned);
+          {filteredSuppliers.map((supplier) => {
+            const actualIndex = suppliers.findIndex((s) => s.id === supplier.id);
             
             return (
               <Card
                 key={supplier.id}
-                className={`p-4 ${supplier.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+                className={`p-4 transition-all ${
+                  supplier.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""
+                } ${dragOverIndex === actualIndex ? "ring-2 ring-blue-400 scale-[1.02]" : ""} ${
+                  dragIndex === actualIndex ? "opacity-50" : ""
+                }`}
+                draggable
+                onDragStart={(e) => handleDragStart(e, actualIndex)}
+                onDragOver={(e) => handleDragOver(e, actualIndex)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, actualIndex)}
+                onDragEnd={handleDragEnd}
               >
                 <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
-                    {supplier.contact && (
-                      <p className="text-sm text-gray-500 mt-1">{supplier.contact}</p>
-                    )}
-                    {supplier.notes && (
-                      <p className="text-sm text-gray-500 mt-1">{supplier.notes}</p>
-                    )}
+                  <div className="flex items-start gap-2 flex-1">
+                    <div
+                      className="cursor-grab active:cursor-grabbing p-1 -ml-1 mt-0.5 text-gray-400 hover:text-gray-600"
+                      title="拖曳排序"
+                    >
+                      <GripVertical size={16} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
+                      {supplier.contact && (
+                        <p className="text-sm text-gray-500 mt-1">{supplier.contact}</p>
+                      )}
+                      {supplier.notes && (
+                        <p className="text-sm text-gray-500 mt-1">{supplier.notes}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-1">
                     <button
@@ -246,22 +304,6 @@ export default function SuppliersPage() {
                       <Trash2 size={16} className="text-red-500" />
                     </button>
                   </div>
-                </div>
-                <div className="flex justify-end gap-1 mt-2">
-                  <button
-                    onClick={() => handleSort(supplier.id, "up")}
-                    disabled={!canMoveUp}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <ChevronUp size={14} className="text-gray-600" />
-                  </button>
-                  <button
-                    onClick={() => handleSort(supplier.id, "down")}
-                    disabled={!canMoveDown}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <ChevronDown size={14} className="text-gray-600" />
-                  </button>
                 </div>
               </Card>
             );

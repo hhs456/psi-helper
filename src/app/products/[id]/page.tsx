@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
@@ -18,9 +18,9 @@ import {
   Edit2,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   Pin,
   PinOff,
+  GripVertical,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -58,6 +58,10 @@ export default function ProductDetailPage() {
   const [expandedSizes, setExpandedSizes] = useState<Set<string>>(new Set());
   const [expandSaleDetails, setExpandSaleDetails] = useState(false);
   const [isLogSectionExpanded, setIsLogSectionExpanded] = useState(false);
+  const [dragVariantId, setDragVariantId] = useState<string | null>(null);
+  const [dragOverVariantId, setDragOverVariantId] = useState<string | null>(null);
+  const [dragSize, setDragSize] = useState<string | null>(null);
+  const dragNodeRef = useRef<HTMLElement | null>(null);
 
   function toggleSize(size: string) {
     setExpandedSizes((prev) => {
@@ -384,53 +388,92 @@ export default function ProductDetailPage() {
     fetchData();
   }
 
-  async function handleSortVariant(id: string, direction: "up" | "down") {
+  function handleVariantDragStart(e: React.DragEvent, variantId: string, size: string) {
+    dragNodeRef.current = e.currentTarget as HTMLElement;
+    setDragVariantId(variantId);
+    setDragSize(size);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleVariantDragOver(e: React.DragEvent, variantId: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragNodeRef.current && dragNodeRef.current !== e.currentTarget) {
+      setDragOverVariantId(variantId);
+    }
+  }
+
+  function handleVariantDragLeave() {
+    setDragOverVariantId(null);
+  }
+
+  async function handleVariantDrop(e: React.DragEvent, dropVariantId: string, dropSize: string) {
+    e.preventDefault();
+    if (!dragVariantId || dragVariantId === dropVariantId) {
+      setDragVariantId(null);
+      setDragOverVariantId(null);
+      setDragSize(null);
+      return;
+    }
+
+    if (dragSize !== dropSize) {
+      setDragVariantId(null);
+      setDragOverVariantId(null);
+      setDragSize(null);
+      return;
+    }
+
+    const draggedVariant = variants.find((v) => v.id === dragVariantId);
+    const targetVariant = variants.find((v) => v.id === dropVariantId);
+
+    if (!draggedVariant || !targetVariant || draggedVariant.is_pinned !== targetVariant.is_pinned) {
+      setDragVariantId(null);
+      setDragOverVariantId(null);
+      setDragSize(null);
+      return;
+    }
+
+    const sizeVariants = variants.filter((v) => (v.size || "均碼") === dropSize);
+    const draggedIndex = sizeVariants.findIndex((v) => v.id === dragVariantId);
+    const dropIndex = sizeVariants.findIndex((v) => v.id === dropVariantId);
+
+    const newSizeVariants = [...sizeVariants];
+    newSizeVariants.splice(draggedIndex, 1);
+    newSizeVariants.splice(dropIndex, 0, draggedVariant);
+
+    const newVariants = variants.map((v) => {
+      if ((v.size || "均碼") !== dropSize) return v;
+      const updated = newSizeVariants.find((nv) => nv.id === v.id);
+      return updated || v;
+    });
+
+    setVariants(newVariants);
+    setDragVariantId(null);
+    setDragOverVariantId(null);
+    setDragSize(null);
+
     const supabase = createClient();
-    const currentIndex = variants.findIndex((v) => v.id === id);
-    if (currentIndex === -1) return;
+    const pinnedGroup = newSizeVariants.filter((v) => v.is_pinned);
+    const unpinnedGroup = newSizeVariants.filter((v) => !v.is_pinned);
 
-    const currentItem = variants[currentIndex];
-    let targetItem: ColorVariant | null = null;
+    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
+      id: item.id,
+      sort_order: newSizeVariants.length - idx,
+    }));
 
-    if (direction === "up") {
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        if (variants[i].is_pinned === currentItem.is_pinned) {
-          targetItem = variants[i];
-          break;
-        }
-      }
-    } else {
-      for (let i = currentIndex + 1; i < variants.length; i++) {
-        if (variants[i].is_pinned === currentItem.is_pinned) {
-          targetItem = variants[i];
-          break;
-        }
-      }
+    for (const update of updates) {
+      await supabase
+        .from("color_variants")
+        .update({ sort_order: update.sort_order })
+        .eq("id", update.id);
     }
+  }
 
-    if (!targetItem) return;
-
-    const { error } = await supabase
-      .from("color_variants")
-      .update({ sort_order: targetItem.sort_order })
-      .eq("id", id);
-
-    if (error) {
-      alert("排序失敗：" + error.message);
-      return;
-    }
-
-    const { error: error2 } = await supabase
-      .from("color_variants")
-      .update({ sort_order: currentItem.sort_order })
-      .eq("id", targetItem.id);
-
-    if (error2) {
-      alert("排序失敗：" + error2.message);
-      return;
-    }
-
-    fetchData();
+  function handleVariantDragEnd() {
+    setDragVariantId(null);
+    setDragOverVariantId(null);
+    setDragSize(null);
+    dragNodeRef.current = null;
   }
 
   if (loading) {
@@ -563,20 +606,34 @@ export default function ProductDetailPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                         {sizeVariants.map((variant) => {
                           const available = variant.purchased - variant.defective - variant.sold;
-                          const sizePinnedVariants = sizeVariants.filter((v) => v.is_pinned === variant.is_pinned);
-                          const pinnedIndex = sizePinnedVariants.findIndex((v) => v.id === variant.id);
-                          const canMoveUp = pinnedIndex > 0;
-                          const canMoveDown = pinnedIndex < sizePinnedVariants.length - 1;
                           
                           return (
                             <Card
                               key={variant.id}
-                              className={`p-4 ${variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+                              className={`p-4 transition-all ${
+                                variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""
+                              } ${dragOverVariantId === variant.id ? "ring-2 ring-blue-400 scale-[1.02]" : ""} ${
+                                dragVariantId === variant.id ? "opacity-50" : ""
+                              }`}
+                              draggable
+                              onDragStart={(e) => handleVariantDragStart(e, variant.id, size)}
+                              onDragOver={(e) => handleVariantDragOver(e, variant.id)}
+                              onDragLeave={handleVariantDragLeave}
+                              onDrop={(e) => handleVariantDrop(e, variant.id, size)}
+                              onDragEnd={handleVariantDragEnd}
                             >
                               <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-semibold text-gray-900">
-                                  {variant.color}
-                                </h3>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-gray-400 hover:text-gray-600"
+                                    title="拖曳排序"
+                                  >
+                                    <GripVertical size={14} />
+                                  </div>
+                                  <h3 className="font-semibold text-gray-900">
+                                    {variant.color}
+                                  </h3>
+                                </div>
                                 <div className="flex gap-1">
                                   <button
                                     onClick={() => handlePinVariant(variant.id, variant.is_pinned)}
@@ -647,22 +704,6 @@ export default function ProductDetailPage() {
                                   </p>
                                   <p className="text-xs text-gray-500">庫存</p>
                                 </div>
-                              </div>
-                              <div className="flex justify-end gap-1 mt-2">
-                                <button
-                                  onClick={() => handleSortVariant(variant.id, "up")}
-                                  disabled={!canMoveUp}
-                                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                  <ChevronUp size={14} className="text-gray-600" />
-                                </button>
-                                <button
-                                  onClick={() => handleSortVariant(variant.id, "down")}
-                                  disabled={!canMoveDown}
-                                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                  <ChevronDown size={14} className="text-gray-600" />
-                                </button>
                               </div>
                             </Card>
                           );
