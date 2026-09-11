@@ -5,6 +5,14 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.5.1] - 2026-09-11
+
+### 修復
+
+- **排序位置改變 BUG**：修復編輯項目或變更庫存時，`sort_order` 被重置導致排序位置改變的問題
+  - 所有更新 `color_variants`、`products`、`suppliers` 的操作現在都會明確保留 `sort_order` 和 `is_pinned` 欄位
+  - 影響的函式：`addStockLog`、`deleteStockLog`、`editVariant`、`handleSubmit`、`handleUpdate`、銷售頁的庫存更新
+
 ## [0.5.0] - 2026-09-11
 
 ### 新增功能

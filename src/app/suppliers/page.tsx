@@ -71,7 +71,11 @@ export default function SuppliersPage() {
     if (editingSupplier) {
       const { error } = await supabase
         .from("suppliers")
-        .update(formData)
+        .update({
+          ...formData,
+          sort_order: editingSupplier.sort_order,
+          is_pinned: editingSupplier.is_pinned,
+        })
         .eq("id", editingSupplier.id);
 
       if (error) {

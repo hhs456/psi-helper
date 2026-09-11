@@ -229,7 +229,10 @@ export default function ProductDetailPage() {
       return;
     }
 
-    const updateData: Record<string, number> = {};
+    const updateData: Record<string, number | boolean> = {
+      sort_order: selectedVariant.sort_order,
+      is_pinned: selectedVariant.is_pinned,
+    };
     if (logForm.type === "purchase") {
       updateData.purchased = selectedVariant.purchased + logForm.quantity;
     } else if (logForm.type === "defect") {
@@ -308,7 +311,10 @@ export default function ProductDetailPage() {
 
     const variant = variants.find((v) => v.id === variantId);
     if (variant) {
-      const updateData: Record<string, number> = {};
+      const updateData: Record<string, number | boolean> = {
+        sort_order: variant.sort_order,
+        is_pinned: variant.is_pinned,
+      };
       if (logType === "purchase") {
         updateData.purchased = variant.purchased - quantity;
       } else if (logType === "defect") {
@@ -337,6 +343,8 @@ export default function ProductDetailPage() {
       .update({
         color: editForm.color,
         size: editForm.size || null,
+        sort_order: editingVariant.sort_order,
+        is_pinned: editingVariant.is_pinned,
       })
       .eq("id", editingVariant.id);
 

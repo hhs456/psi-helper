@@ -281,7 +281,11 @@ export default function SalesPage() {
       if (variant) {
         await supabase
           .from("color_variants")
-          .update({ sold: variant.sold + item.quantity })
+          .update({ 
+            sold: variant.sold + item.quantity,
+            sort_order: variant.sort_order,
+            is_pinned: variant.is_pinned,
+          })
           .eq("id", variant.id);
 
         await supabase.from("stock_logs").insert([
@@ -370,7 +374,11 @@ export default function SalesPage() {
         if (variant) {
           await supabase
             .from("color_variants")
-            .update({ sold: variant.sold + diff })
+            .update({ 
+              sold: variant.sold + diff,
+              sort_order: variant.sort_order,
+              is_pinned: variant.is_pinned,
+            })
             .eq("id", variantId);
 
           const reference = formData.customer_name || editingOrder.client_code;
@@ -403,7 +411,11 @@ export default function SalesPage() {
         if (variant) {
           await supabase
             .from("color_variants")
-            .update({ sold: variant.sold - item.quantity })
+            .update({ 
+              sold: variant.sold - item.quantity,
+              sort_order: variant.sort_order,
+              is_pinned: variant.is_pinned,
+            })
             .eq("id", variant.id);
 
           await supabase.from("stock_logs").insert([
@@ -449,7 +461,11 @@ export default function SalesPage() {
         if (variant) {
           await supabase
             .from("color_variants")
-            .update({ sold: variant.sold - item.quantity })
+            .update({ 
+              sold: variant.sold - item.quantity,
+              sort_order: variant.sort_order,
+              is_pinned: variant.is_pinned,
+            })
             .eq("id", variant.id);
 
           await supabase.from("stock_logs").insert([

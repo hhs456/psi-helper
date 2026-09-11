@@ -161,7 +161,11 @@ export default function ProductsPage() {
     if (editingProduct) {
       const { error } = await supabase
         .from("products")
-        .update(productData)
+        .update({
+          ...productData,
+          sort_order: editingProduct.sort_order,
+          is_pinned: editingProduct.is_pinned,
+        })
         .eq("id", editingProduct.id);
 
       if (error) {

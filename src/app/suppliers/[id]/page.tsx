@@ -104,7 +104,11 @@ export default function SupplierDetailPage() {
 
     const { error } = await supabase
       .from("suppliers")
-      .update(formData)
+      .update({
+        ...formData,
+        sort_order: supplier?.sort_order ?? 0,
+        is_pinned: supplier?.is_pinned ?? false,
+      })
       .eq("id", supplierId);
 
     if (error) {
