@@ -7,5 +7,5 @@ export default async function ProductDetailPage({
 }) {
   const { id: productId } = await params;
 
-  return <ProductDetailClient key={productId} productId={productId} />;
+  return <ProductDetailClient productId={productId} />;
 }

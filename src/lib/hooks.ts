@@ -138,7 +138,7 @@ export function useProductDetail(productId: string) {
     };
   };
 
-  const { data, error, isLoading, mutate } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     productId ? ["product-detail", productId] : null,
     fetcher,
     {
@@ -153,6 +153,7 @@ export function useProductDetail(productId: string) {
     variants: data?.variants || [],
     nextClientCode: data?.nextClientCode || "C001",
     isLoading,
+    isValidating,
     error,
     mutate,
   };

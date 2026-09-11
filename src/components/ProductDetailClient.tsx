@@ -151,11 +151,19 @@ function SortableVariantCard({
 
 export function ProductDetailClient({ productId }: { productId: string }) {
   const router = useRouter();
-  const { product, variants: fetchedVariants, nextClientCode: initialNextClientCode, isLoading, error } = useProductDetail(productId);
+  const { product, variants: fetchedVariants, nextClientCode: initialNextClientCode, isLoading, isValidating, error } = useProductDetail(productId);
 
-  const [variants, setVariants] = useState<ColorVariant[]>([]);
+  const [variants, setVariants] = useState<ColorVariant[]>(fetchedVariants);
   const [stockLogs, setStockLogs] = useState<StockLog[]>([]);
   const [stockLogsLoading, setStockLogsLoading] = useState(false);
+  const [prevProductId, setPrevProductId] = useState(productId);
+
+  // Reset local state when productId changes
+  if (prevProductId !== productId) {
+    setPrevProductId(productId);
+    setVariants([]);
+    setStockLogs([]);
+  }
 
   // Sync local state with SWR data when it loads
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -270,7 +278,8 @@ export function ProductDetailClient({ productId }: { productId: string }) {
     }
   }
 
-  if (isLoading) {
+  // Show loading on initial load or when switching products
+  if (isLoading || (isValidating && variants.length === 0)) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="animate-spin text-gray-400" size={32} />
