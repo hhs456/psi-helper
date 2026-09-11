@@ -5,6 +5,61 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.9.0] - 2026-09-11
+
+### 效能優化
+
+- **商品詳情頁 Server Component 化**：將 `products/[id]/page.tsx` 改為 Server Component，資料在伺服器端獲取後傳遞給 Client Component，首次載入速度提升
+- **拖曳排序批次更新**：新增 `batch_update_sort_order` RPC 函數，拖曳排序從 N 次資料庫請求減少為 1 次，操作回應時間大幅改善
+- **首頁分頁**：庫存總覽頁面新增分頁功能（每頁 20 筆），避免資料量增長後效能下降
+- **異動記錄延遲載入**：商品詳情頁的異動記錄改為展開時才載入，減少初始資料量
+- **React 效能優化**：使用 `useMemo` 優化計算密集型邏輯（款式分組、統計數據等）
+- **樂觀更新**：刪除款式操作改為樂觀更新，UI 立即反應，失敗時自動回滾
+
+### 介面簡化
+
+- **隱藏銷售與報表頁面**：移除側邊欄的「銷售記錄」和「報表分析」導航項目，簡化使用者介面
+- 刪除 `src/app/sales` 和 `src/app/reports` 頁面目錄
+
+### 新增元件
+
+- `Pagination`：通用分頁元件，支援頁碼跳轉和省略號顯示
+- `ProductDetailClient`：商品詳情頁的 Client Component，處理互動邏輯
+
+### 資料遷移
+
+此版本需要執行資料遷移。請在 Supabase SQL Editor 中執行以下 SQL：
+
+```sql
+-- 批次更新排序的 RPC 函數
+CREATE OR REPLACE FUNCTION batch_update_sort_order(
+  p_table_name TEXT,
+  p_items JSONB
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  item JSONB;
+  item_id UUID;
+  item_sort_order INTEGER;
+BEGIN
+  FOR item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    item_id := (item->>'id')::UUID;
+    item_sort_order := (item->>'sort_order')::INTEGER;
+    
+    EXECUTE format(
+      'UPDATE %I SET sort_order = $1 WHERE id = $2',
+      p_table_name
+    )
+    USING item_sort_order, item_id;
+  END LOOP;
+END;
+$$;
+```
+
 ## [0.8.0] - 2026-09-11
 
 ### 效能優化

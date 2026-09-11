@@ -384,11 +384,13 @@ export function ProductsClient({
       sort_order: newProducts.length - idx,
     }));
 
-    for (const update of updates) {
-      await supabase
-        .from("products")
-        .update({ sort_order: update.sort_order })
-        .eq("id", update.id);
+    const { error } = await supabase.rpc("batch_update_sort_order", {
+      p_table_name: "products",
+      p_items: updates,
+    });
+
+    if (error) {
+      console.error("排序更新失敗:", error);
     }
   }
 

@@ -265,11 +265,13 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
       sort_order: newSuppliers.length - idx,
     }));
 
-    for (const update of updates) {
-      await supabase
-        .from("suppliers")
-        .update({ sort_order: update.sort_order })
-        .eq("id", update.id);
+    const { error } = await supabase.rpc("batch_update_sort_order", {
+      p_table_name: "suppliers",
+      p_items: updates,
+    });
+
+    if (error) {
+      console.error("排序更新失敗:", error);
     }
   }
 
