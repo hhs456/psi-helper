@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, GripVertical, Search, Loader2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -25,6 +25,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useSuppliers } from "@/lib/hooks";
 import type { Supplier } from "@/types";
 
 function SortableSupplierCard({
@@ -114,12 +115,35 @@ function SortableSupplierCard({
   );
 }
 
-export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Supplier[] }) {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+export function SuppliersClient() {
+  const { suppliers, isLoading, error, mutate } = useSuppliers();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
   const [searchQuery, setSearchQuery] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-gray-400" size={32} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-red-500">載入失敗：{error.message}</div>;
+  }
 
   function openModal(supplier?: Supplier) {
     if (supplier) {
@@ -170,23 +194,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
     }
 
     closeModal();
-    await fetchSuppliers();
-  }
-
-  async function fetchSuppliers() {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("suppliers")
-      .select("*")
-      .order("is_pinned", { ascending: false })
-      .order("sort_order", { ascending: false })
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Error fetching suppliers:", error);
-      return;
-    }
-    setSuppliers((data || []) as Supplier[]);
+    await mutate();
   }
 
   async function handleDelete(id: string) {
@@ -200,7 +208,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
       return;
     }
 
-    await fetchSuppliers();
+    await mutate();
   }
 
   async function handlePin(id: string, currentIsPinned: boolean) {
@@ -224,19 +232,8 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
       return;
     }
 
-    await fetchSuppliers();
+    await mutate();
   }
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -254,7 +251,6 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
     const newIndex = suppliers.findIndex((s) => s.id === over.id);
 
     const newSuppliers = arrayMove(suppliers, oldIndex, newIndex);
-    setSuppliers(newSuppliers);
 
     const supabase = createClient();
     const pinnedGroup = newSuppliers.filter((s) => s.is_pinned);
@@ -272,6 +268,8 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
 
     if (error) {
       console.error("排序更新失敗:", error);
+    } else {
+      await mutate();
     }
   }
 

@@ -4,11 +4,24 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Card } from "@/components/ui/Card";
-import { Package, Search } from "lucide-react";
-import type { InventorySummary } from "@/types";
+import { Package, Search, Loader2 } from "lucide-react";
+import { useInventory } from "@/lib/hooks";
 
-export function HomeClient({ inventory }: { inventory: InventorySummary[] }) {
+export function HomeClient() {
+  const { inventory, isLoading, error } = useInventory();
   const [searchQuery, setSearchQuery] = useState("");
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-gray-400" size={32} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-red-500">載入失敗：{error.message}</div>;
+  }
 
   const filteredInventory = inventory.filter((item) => {
     const query = searchQuery.toLowerCase();
