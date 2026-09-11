@@ -6,10 +6,10 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, ShoppingCart, Calendar, Trash2, X, Package } from "lucide-react";
+import { Plus, ShoppingCart, Calendar, Trash2, X, Edit2, Split } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
-import type { SalesOrder, Product, ColorVariant, SalesItem } from "@/types";
+import type { SalesOrder, Product, ColorVariant } from "@/types";
 
 interface OrderItem {
   color_variant_id: string;
@@ -26,6 +26,9 @@ export default function SalesPage() {
   const [variants, setVariants] = useState<(ColorVariant & { product_name: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<SalesOrder | null>(null);
+  const [splittingOrder, setSplittingOrder] = useState<SalesOrder | null>(null);
   const [nextClientCode, setNextClientCode] = useState("");
 
   const [formData, setFormData] = useState({
@@ -37,9 +40,14 @@ export default function SalesPage() {
   });
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemUnitPrice, setItemUnitPrice] = useState(0);
+
+  const filteredVariants = selectedProductId
+    ? variants.filter((v) => v.product_id === selectedProductId)
+    : [];
 
   useEffect(() => {
     fetchData();
@@ -110,6 +118,7 @@ export default function SalesPage() {
   }
 
   function openModal() {
+    setEditingOrder(null);
     setFormData({
       customer_name: "",
       source: "manual",
@@ -118,6 +127,37 @@ export default function SalesPage() {
       notes: "",
     });
     setOrderItems([]);
+    setSelectedProductId("");
+    setSelectedVariantId("");
+    setItemQuantity(1);
+    setItemUnitPrice(0);
+    setIsModalOpen(true);
+  }
+
+  function openEditModal(order: SalesOrder) {
+    setEditingOrder(order);
+    const items = (order.sales_items || []) as any[];
+    setFormData({
+      customer_name: order.customer_name || "",
+      source: order.source as "shopee" | "manual" | "other",
+      shopee_order_id: order.shopee_order_id || "",
+      order_date: order.order_date || format(new Date(), "yyyy-MM-dd"),
+      notes: order.notes || "",
+    });
+    setOrderItems(
+      items.map((item) => {
+        const variant = item.color_variant as any;
+        return {
+          color_variant_id: item.color_variant_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price || 0,
+          product_name: variant?.product?.name || "",
+          color: variant?.color || "",
+          size: variant?.size || null,
+        };
+      })
+    );
+    setSelectedProductId("");
     setSelectedVariantId("");
     setItemQuantity(1);
     setItemUnitPrice(0);
@@ -126,6 +166,7 @@ export default function SalesPage() {
 
   function closeModal() {
     setIsModalOpen(false);
+    setEditingOrder(null);
   }
 
   function addItem() {
@@ -134,10 +175,15 @@ export default function SalesPage() {
     const variant = variants.find((v) => v.id === selectedVariantId);
     if (!variant) return;
 
-    const available = variant.purchased - variant.defective - variant.sold;
-    if (itemQuantity > available) {
-      alert(`庫存不足！目前可用庫存為 ${available}`);
-      return;
+    if (!editingOrder) {
+      const available = variant.purchased - variant.defective - variant.sold;
+      const existingQty = orderItems
+        .filter((item) => item.color_variant_id === selectedVariantId)
+        .reduce((sum, item) => sum + item.quantity, 0);
+      if (itemQuantity + existingQty > available) {
+        alert(`庫存不足！目前可用庫存為 ${available}，已加入 ${existingQty}`);
+        return;
+      }
     }
 
     const existingIdx = orderItems.findIndex((item) => item.color_variant_id === selectedVariantId);
@@ -164,6 +210,12 @@ export default function SalesPage() {
     setItemUnitPrice(0);
   }
 
+  function handleProductChange(productId: string) {
+    setSelectedProductId(productId);
+    setSelectedVariantId("");
+    setItemQuantity(1);
+  }
+
   function removeItem(index: number) {
     setOrderItems(orderItems.filter((_, i) => i !== index));
   }
@@ -177,7 +229,16 @@ export default function SalesPage() {
       return;
     }
 
+    if (editingOrder) {
+      await handleUpdateOrder();
+    } else {
+      await handleCreateOrder();
+    }
+  }
+
+  async function handleCreateOrder() {
     const supabase = createClient();
+    const reference = formData.customer_name || nextClientCode;
 
     const { data: orderData, error: orderError } = await supabase
       .from("sales_orders")
@@ -222,6 +283,106 @@ export default function SalesPage() {
           .from("color_variants")
           .update({ sold: variant.sold + item.quantity })
           .eq("id", variant.id);
+
+        await supabase.from("stock_logs").insert([
+          {
+            color_variant_id: item.color_variant_id,
+            type: "sale",
+            quantity: item.quantity,
+            reference: reference,
+          },
+        ]);
+      }
+    }
+
+    closeModal();
+    fetchData();
+  }
+
+  async function handleUpdateOrder() {
+    if (!editingOrder) return;
+    const supabase = createClient();
+
+    const oldItems = (editingOrder.sales_items || []) as any[];
+    const oldItemsMap = new Map<string, number>();
+    for (const item of oldItems) {
+      oldItemsMap.set(item.color_variant_id, (oldItemsMap.get(item.color_variant_id) || 0) + item.quantity);
+    }
+
+    const newItemsMap = new Map<string, number>();
+    for (const item of orderItems) {
+      newItemsMap.set(item.color_variant_id, (newItemsMap.get(item.color_variant_id) || 0) + item.quantity);
+    }
+
+    const { error: orderError } = await supabase
+      .from("sales_orders")
+      .update({
+        client_code: editingOrder.client_code,
+        customer_name: formData.customer_name || null,
+        source: formData.source,
+        shopee_order_id: formData.shopee_order_id || null,
+        order_date: formData.order_date,
+        total_amount: totalAmount,
+        notes: formData.notes || null,
+      })
+      .eq("id", editingOrder.id);
+
+    if (orderError) {
+      alert("更新失敗：" + orderError.message);
+      return;
+    }
+
+    const { error: deleteItemsError } = await supabase
+      .from("sales_items")
+      .delete()
+      .eq("sales_order_id", editingOrder.id);
+
+    if (deleteItemsError) {
+      alert("刪除舊明細失敗：" + deleteItemsError.message);
+      return;
+    }
+
+    if (orderItems.length > 0) {
+      const salesItems = orderItems.map((item) => ({
+        sales_order_id: editingOrder.id,
+        color_variant_id: item.color_variant_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        amount: item.quantity * item.unit_price,
+      }));
+
+      const { error: itemsError } = await supabase.from("sales_items").insert(salesItems);
+
+      if (itemsError) {
+        alert("新增明細失敗：" + itemsError.message);
+        return;
+      }
+    }
+
+    const allVariantIds = new Set([...oldItemsMap.keys(), ...newItemsMap.keys()]);
+    for (const variantId of allVariantIds) {
+      const oldQty = oldItemsMap.get(variantId) || 0;
+      const newQty = newItemsMap.get(variantId) || 0;
+      const diff = newQty - oldQty;
+
+      if (diff !== 0) {
+        const variant = variants.find((v) => v.id === variantId);
+        if (variant) {
+          await supabase
+            .from("color_variants")
+            .update({ sold: variant.sold + diff })
+            .eq("id", variantId);
+
+          const reference = formData.customer_name || editingOrder.client_code;
+          await supabase.from("stock_logs").insert([
+            {
+              color_variant_id: variantId,
+              type: "sale",
+              quantity: Math.abs(diff),
+              reference: `${reference} (調整${diff > 0 ? "+" : ""}${diff})`,
+            },
+          ]);
+        }
       }
     }
 
@@ -245,9 +406,34 @@ export default function SalesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("確定要刪除此銷售訂單嗎？")) return;
+    if (!confirm("確定要刪除此銷售訂單嗎？庫存數量也會一併回復。")) return;
 
     const supabase = createClient();
+    const order = orders.find((o) => o.id === id);
+    if (!order) return;
+
+    const items = (order.sales_items || []) as any[];
+    const reference = order.customer_name || order.client_code;
+
+    for (const item of items) {
+      const variant = variants.find((v) => v.id === item.color_variant_id);
+      if (variant) {
+        await supabase
+          .from("color_variants")
+          .update({ sold: variant.sold - item.quantity })
+          .eq("id", variant.id);
+
+        await supabase.from("stock_logs").insert([
+          {
+            color_variant_id: variant.id,
+            type: "sale",
+            quantity: item.quantity,
+            reference: `${reference} (刪除訂單)`,
+          },
+        ]);
+      }
+    }
+
     const { error } = await supabase.from("sales_orders").delete().eq("id", id);
 
     if (error) {
@@ -269,6 +455,163 @@ export default function SalesPage() {
     completed: "已完成",
     cancelled: "已取消",
   };
+
+  interface SplitItem {
+    original_index: number;
+    color_variant_id: string;
+    original_quantity: number;
+    keep_quantity: number;
+    split_quantity: number;
+    product_name: string;
+    color: string;
+    size: string | null;
+  }
+
+  const [splitItems, setSplitItems] = useState<SplitItem[]>([]);
+  const [splitClientCode, setSplitClientCode] = useState("");
+  const [splitCustomerName, setSplitCustomerName] = useState("");
+
+  function openSplitModal(order: SalesOrder) {
+    setSplittingOrder(order);
+    const items = (order.sales_items || []) as any[];
+    setSplitItems(
+      items.map((item, idx) => {
+        const variant = item.color_variant as any;
+        return {
+          original_index: idx,
+          color_variant_id: item.color_variant_id,
+          original_quantity: item.quantity,
+          keep_quantity: item.quantity,
+          split_quantity: 0,
+          product_name: variant?.product?.name || "",
+          color: variant?.color || "",
+          size: variant?.size || null,
+        };
+      })
+    );
+    setSplitClientCode(nextClientCode);
+    setSplitCustomerName("");
+    setIsSplitModalOpen(true);
+  }
+
+  function updateSplitItem(index: number, field: "keep_quantity" | "split_quantity", value: number) {
+    setSplitItems((prev) => {
+      const updated = [...prev];
+      const item = updated[index];
+      if (field === "keep_quantity") {
+        const maxKeep = item.original_quantity;
+        const newKeep = Math.min(Math.max(0, value), maxKeep);
+        item.keep_quantity = newKeep;
+        item.split_quantity = item.original_quantity - newKeep;
+      } else {
+        const maxSplit = item.original_quantity;
+        const newSplit = Math.min(Math.max(0, value), maxSplit);
+        item.split_quantity = newSplit;
+        item.keep_quantity = item.original_quantity - newSplit;
+      }
+      return updated;
+    });
+  }
+
+  async function handleSplit() {
+    if (!splittingOrder) return;
+
+    const hasSplit = splitItems.some((item) => item.split_quantity > 0);
+    if (!hasSplit) {
+      alert("沒有需要拆分的項目");
+      return;
+    }
+
+    const supabase = createClient();
+
+    const splitSalesItems = splitItems
+      .filter((item) => item.split_quantity > 0)
+      .map((item) => {
+        const originalItem = (splittingOrder.sales_items as any[])[item.original_index];
+        return {
+          sales_order_id: null as string | null,
+          color_variant_id: item.color_variant_id,
+          quantity: item.split_quantity,
+          unit_price: originalItem.unit_price || 0,
+          amount: item.split_quantity * (originalItem.unit_price || 0),
+        };
+      });
+
+    const { data: newOrderData, error: newOrderError } = await supabase
+      .from("sales_orders")
+      .insert([
+        {
+          client_code: splitClientCode,
+          customer_name: splitCustomerName || null,
+          source: splittingOrder.source,
+          shopee_order_id: null,
+          order_date: splittingOrder.order_date,
+          total_amount: splitSalesItems.reduce((sum, item) => sum + item.amount, 0),
+          notes: `從訂單 ${splittingOrder.client_code} 拆分`,
+        },
+      ])
+      .select()
+      .single();
+
+    if (newOrderError) {
+      alert("建立新訂單失敗：" + newOrderError.message);
+      return;
+    }
+
+    for (const item of splitSalesItems) {
+      item.sales_order_id = newOrderData.id;
+    }
+
+    const { error: itemsError } = await supabase.from("sales_items").insert(splitSalesItems);
+
+    if (itemsError) {
+      alert("新增拆分明細失敗：" + itemsError.message);
+      return;
+    }
+
+    const keepItems = splitItems
+      .filter((item) => item.keep_quantity > 0)
+      .map((item) => {
+        const originalItem = (splittingOrder.sales_items as any[])[item.original_index];
+        return {
+          id: originalItem.id,
+          quantity: item.keep_quantity,
+          amount: item.keep_quantity * (originalItem.unit_price || 0),
+        };
+      });
+
+    for (const item of keepItems) {
+      await supabase
+        .from("sales_items")
+        .update({ quantity: item.quantity, amount: item.amount })
+        .eq("id", item.id);
+    }
+
+    const removeItems = splitItems
+      .filter((item) => item.keep_quantity === 0)
+      .map((item) => {
+        const originalItem = (splittingOrder.sales_items as any[])[item.original_index];
+        return originalItem.id;
+      });
+
+    if (removeItems.length > 0) {
+      await supabase.from("sales_items").delete().in("id", removeItems);
+    }
+
+    const newTotalAmount = splitItems.reduce((sum, item) => {
+      const originalItem = (splittingOrder.sales_items as any[])[item.original_index];
+      return sum + item.keep_quantity * (originalItem.unit_price || 0);
+    }, 0);
+
+    await supabase
+      .from("sales_orders")
+      .update({ total_amount: newTotalAmount })
+      .eq("id", splittingOrder.id);
+
+    setIsSplitModalOpen(false);
+    setSplittingOrder(null);
+    fetchData();
+  }
 
   if (loading) {
     return (
@@ -334,6 +677,18 @@ export default function SalesPage() {
                     <div className="mt-2 text-lg font-bold text-orange-600">${order.total_amount}</div>
                   </div>
                   <div className="flex gap-1">
+                    {(order.status === "pending" || order.status === "completed") && (
+                      <>
+                        <Button size="sm" variant="secondary" onClick={() => openEditModal(order)}>
+                          <Edit2 size={14} className="mr-1" />
+                          編輯
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => openSplitModal(order)}>
+                          <Split size={14} className="mr-1" />
+                          拆單
+                        </Button>
+                      </>
+                    )}
                     {order.status === "pending" && (
                       <>
                         <Button size="sm" variant="secondary" onClick={() => updateStatus(order.id, "completed")}>
@@ -355,12 +710,14 @@ export default function SalesPage() {
         </div>
       )}
 
-      <Modal isOpen={isModalOpen} onClose={closeModal} title="新增銷售單">
+      <Modal isOpen={isModalOpen} onClose={closeModal} title={editingOrder ? "編輯銷售單" : "新增銷售單"}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
-            <span className="text-sm text-gray-600">客戶編號</span>
-            <span className="font-mono font-bold text-gray-900">{nextClientCode}</span>
-          </div>
+          {!editingOrder && (
+            <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
+              <span className="text-sm text-gray-600">客戶編號</span>
+              <span className="font-mono font-bold text-gray-900">{nextClientCode}</span>
+            </div>
+          )}
 
           <Input
             label="客戶名稱（選填，留白顯示編號）"
@@ -404,6 +761,18 @@ export default function SalesPage() {
             <div className="bg-gray-50 rounded-lg p-3 space-y-2">
               <div className="grid grid-cols-1 gap-2">
                 <select
+                  value={selectedProductId}
+                  onChange={(e) => handleProductChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="">選擇商品</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}{p.code ? ` (${p.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <select
                   value={selectedVariantId}
                   onChange={(e) => {
                     setSelectedVariantId(e.target.value);
@@ -413,14 +782,17 @@ export default function SalesPage() {
                       setItemQuantity(Math.min(1, available));
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  disabled={!selectedProductId}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
-                  <option value="">選擇商品/顏色</option>
-                  {variants.map((v) => {
+                  <option value="">
+                    {selectedProductId ? "選擇顏色/款式" : "請先選擇商品"}
+                  </option>
+                  {filteredVariants.map((v) => {
                     const available = v.purchased - v.defective - v.sold;
                     return (
                       <option key={v.id} value={v.id} disabled={available <= 0}>
-                        {v.product_name} - {v.color}{v.size ? `/${v.size}` : ""} (庫存: {available})
+                        {v.color}{v.size ? `/${v.size}` : ""} (庫存: {available})
                       </option>
                     );
                   })}
@@ -487,9 +859,101 @@ export default function SalesPage() {
             <Button type="button" variant="secondary" onClick={closeModal}>
               取消
             </Button>
-            <Button type="submit">新增</Button>
+            <Button type="submit">{editingOrder ? "更新" : "新增"}</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={isSplitModalOpen}
+        onClose={() => {
+          setIsSplitModalOpen(false);
+          setSplittingOrder(null);
+        }}
+        title="拆單"
+      >
+        <div className="space-y-4">
+          {splittingOrder && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-sm text-gray-600">
+                從訂單 <span className="font-mono font-bold">{splittingOrder.client_code}</span> 拆分
+              </p>
+            </div>
+          )}
+
+          <div className="bg-orange-50 rounded-lg p-3 space-y-2">
+            <h4 className="font-medium text-gray-900">新訂單客戶資訊</h4>
+            <div className="bg-white rounded-lg p-2 flex items-center justify-between">
+              <span className="text-sm text-gray-600">客戶編號</span>
+              <span className="font-mono font-bold text-gray-900">{splitClientCode}</span>
+            </div>
+            <Input
+              label="客戶名稱（選填）"
+              value={splitCustomerName}
+              onChange={(e) => setSplitCustomerName(e.target.value)}
+              placeholder="留白將顯示客戶編號"
+            />
+          </div>
+
+          <div>
+            <h4 className="font-medium text-gray-900 mb-2">拆分明細</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              調整每個項目的「保留數量」和「拆分數量」，拆分數量會移到新訂單
+            </p>
+            <div className="space-y-3">
+              {splitItems.map((item, idx) => (
+                <div key={idx} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-sm">
+                      {item.product_name} ({item.color}{item.size ? `/${item.size}` : ""})
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      原始數量：{item.original_quantity}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">保留數量</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={item.original_quantity}
+                        value={item.keep_quantity}
+                        onChange={(e) => updateSplitItem(idx, "keep_quantity", parseInt(e.target.value) || 0)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">拆分數量</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={item.original_quantity}
+                        value={item.split_quantity}
+                        onChange={(e) => updateSplitItem(idx, "split_quantity", parseInt(e.target.value) || 0)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsSplitModalOpen(false);
+                setSplittingOrder(null);
+              }}
+            >
+              取消
+            </Button>
+            <Button onClick={handleSplit}>確認拆分</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

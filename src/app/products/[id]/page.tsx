@@ -15,6 +15,8 @@ import {
   TrendingDown,
   AlertTriangle,
   Trash2,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -43,6 +45,32 @@ export default function ProductDetailPage() {
     unit_price: 0,
   });
   const [nextClientCode, setNextClientCode] = useState("");
+  const [expandedSizes, setExpandedSizes] = useState<Set<string>>(new Set());
+
+  function toggleSize(size: string) {
+    setExpandedSizes((prev) => {
+      const next = new Set(prev);
+      if (next.has(size)) {
+        next.delete(size);
+      } else {
+        next.add(size);
+      }
+      return next;
+    });
+  }
+
+  const variantsBySize = variants.reduce<Record<string, ColorVariant[]>>((acc, v) => {
+    const size = v.size || "均碼";
+    if (!acc[size]) acc[size] = [];
+    acc[size].push(v);
+    return acc;
+  }, {});
+
+  const sizeOrder = Object.keys(variantsBySize).sort((a, b) => {
+    if (a === "均碼") return 1;
+    if (b === "均碼") return -1;
+    return a.localeCompare(b);
+  });
 
   useEffect(() => {
     if (productId) {
@@ -54,14 +82,27 @@ export default function ProductDetailPage() {
     try {
       const supabase = createClient();
 
-      const [productRes, variantsRes, logsRes, ordersRes] = await Promise.all([
+      const [productRes, variantsRes, ordersRes] = await Promise.all([
         supabase.from("products").select("*").eq("id", productId).single(),
         supabase
           .from("color_variants")
           .select("*")
           .eq("product_id", productId)
           .order("created_at", { ascending: true }),
-        supabase
+        supabase.from("sales_orders").select("client_code"),
+      ]);
+
+      if (productRes.error) throw productRes.error;
+      if (variantsRes.error) throw variantsRes.error;
+      if (ordersRes.error) throw ordersRes.error;
+
+      setProduct(productRes.data);
+      setVariants(variantsRes.data || []);
+
+      const variantIds = (variantsRes.data || []).map((v) => v.id);
+      let logsRes;
+      if (variantIds.length > 0) {
+        logsRes = await supabase
           .from("stock_logs")
           .select(`
             *,
@@ -76,18 +117,13 @@ export default function ProductDetailPage() {
               )
             )
           `)
-          .eq("color_variant.product_id", productId)
-          .order("created_at", { ascending: false }),
-        supabase.from("sales_orders").select("client_code"),
-      ]);
+          .in("color_variant_id", variantIds)
+          .order("created_at", { ascending: false });
+      } else {
+        logsRes = { data: [], error: null };
+      }
 
-      if (productRes.error) throw productRes.error;
-      if (variantsRes.error) throw variantsRes.error;
       if (logsRes.error) throw logsRes.error;
-      if (ordersRes.error) throw ordersRes.error;
-
-      setProduct(productRes.data);
-      setVariants(variantsRes.data || []);
       setStockLogs(logsRes.data || []);
 
       const maxCode = (ordersRes.data || [])
@@ -355,64 +391,98 @@ export default function ProductDetailPage() {
             尚無顏色/款式資料
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {variants.map((variant) => {
-              const available = variant.purchased - variant.defective - variant.sold;
+          <div className="space-y-4">
+            {sizeOrder.map((size) => {
+              const isExpanded = expandedSizes.has(size);
+              const sizeVariants = variantsBySize[size];
               return (
-                <Card key={variant.id} className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900">
-                      {variant.color}
-                      {variant.size && ` / ${variant.size}`}
-                    </h3>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setSelectedVariant(variant);
-                          setIsLogModalOpen(true);
-                        }}
-                      >
-                        記錄
-                      </Button>
-                      <button
-                        onClick={() => deleteVariant(variant.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 size={14} className="text-red-500" />
-                      </button>
+                <div key={size} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSize(size)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? (
+                        <ChevronDown size={18} className="text-gray-500" />
+                      ) : (
+                        <ChevronRight size={18} className="text-gray-500" />
+                      )}
+                      <span className="font-semibold text-gray-900">{size}</span>
+                      <span className="text-sm text-gray-500">({sizeVariants.length} 款)</span>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-center">
-                    <div>
-                      <p className="text-lg font-bold">{variant.purchased}</p>
-                      <p className="text-xs text-gray-500">進貨</p>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-gray-600">
+                        庫存：
+                        <span className="font-bold text-green-600">
+                          {sizeVariants.reduce((sum, v) => sum + (v.purchased - v.defective - v.sold), 0)}
+                        </span>
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-lg font-bold text-yellow-600">
-                        {variant.defective}
-                      </p>
-                      <p className="text-xs text-gray-500">瑕疵</p>
+                  </button>
+                  {isExpanded && (
+                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {sizeVariants.map((variant) => {
+                        const available = variant.purchased - variant.defective - variant.sold;
+                        return (
+                          <Card key={variant.id} className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold text-gray-900">
+                                {variant.color}
+                              </h3>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setSelectedVariant(variant);
+                                    setIsLogModalOpen(true);
+                                  }}
+                                >
+                                  記錄
+                                </Button>
+                                <button
+                                  onClick={() => deleteVariant(variant.id)}
+                                  className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                                >
+                                  <Trash2 size={14} className="text-red-500" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 text-center">
+                              <div>
+                                <p className="text-lg font-bold">{variant.purchased}</p>
+                                <p className="text-xs text-gray-500">進貨</p>
+                              </div>
+                              <div>
+                                <p className="text-lg font-bold text-yellow-600">
+                                  {variant.defective}
+                                </p>
+                                <p className="text-xs text-gray-500">瑕疵</p>
+                              </div>
+                              <div>
+                                <p className="text-lg font-bold text-red-600">
+                                  {variant.sold}
+                                </p>
+                                <p className="text-xs text-gray-500">已售</p>
+                              </div>
+                              <div>
+                                <p
+                                  className={`text-lg font-bold ${
+                                    available > 0 ? "text-green-600" : "text-red-600"
+                                  }`}
+                                >
+                                  {available}
+                                </p>
+                                <p className="text-xs text-gray-500">庫存</p>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
                     </div>
-                    <div>
-                      <p className="text-lg font-bold text-red-600">
-                        {variant.sold}
-                      </p>
-                      <p className="text-xs text-gray-500">已售</p>
-                    </div>
-                    <div>
-                      <p
-                        className={`text-lg font-bold ${
-                          available > 0 ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        {available}
-                      </p>
-                      <p className="text-xs text-gray-500">庫存</p>
-                    </div>
-                  </div>
-                </Card>
+                  )}
+                </div>
               );
             })}
           </div>
