@@ -7,8 +7,116 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Warehouse, ExternalLink, Pin, PinOff, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Edit2, Trash2, Warehouse, ExternalLink, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Supplier } from "@/types";
+
+function SortableSupplierCard({
+  supplier,
+  onPin,
+  onEdit,
+  onDelete,
+}: {
+  supplier: Supplier;
+  onPin: (id: string, isPinned: boolean) => void;
+  onEdit: (supplier: Supplier) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: supplier.id,
+    data: { isPinned: supplier.is_pinned },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 ${supplier.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-2 flex-1">
+          <div
+            className="cursor-grab active:cursor-grabbing p-1 -ml-1 mt-0.5 text-gray-400 hover:text-gray-600 touch-none"
+            title="拖曳排序"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={16} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
+            {supplier.contact && (
+              <p className="text-sm text-gray-500 mt-1">{supplier.contact}</p>
+            )}
+            {supplier.notes && (
+              <p className="text-sm text-gray-500 mt-1">{supplier.notes}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => onPin(supplier.id, supplier.is_pinned)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            title={supplier.is_pinned ? "取消釘選" : "釘選"}
+          >
+            {supplier.is_pinned ? (
+              <PinOff size={16} className="text-orange-500" />
+            ) : (
+              <Pin size={16} className="text-gray-400" />
+            )}
+          </button>
+          <Link
+            href={`/suppliers/${supplier.id}`}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <ExternalLink size={16} className="text-blue-600" />
+          </Link>
+          <button
+            onClick={() => onEdit(supplier)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Edit2 size={16} className="text-gray-600" />
+          </button>
+          <button
+            onClick={() => onDelete(supplier.id)}
+            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={16} className="text-red-500" />
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -16,6 +124,7 @@ export default function SuppliersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchSuppliers();
@@ -27,8 +136,9 @@ export default function SuppliersPage() {
       const { data, error } = await supabase
         .from("suppliers")
         .select("*")
-        .order("is_pinned", { ascending: false })
-        .order("sort_order", { ascending: false });
+.order("is_pinned", { ascending: false })
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true });
 
       if (error) throw error;
       setSuppliers(data || []);
@@ -75,7 +185,11 @@ export default function SuppliersPage() {
         return;
       }
     } else {
-      const { error } = await supabase.from("suppliers").insert([formData]);
+      const maxOrder = Math.max(...suppliers.map((s) => s.sort_order), 0);
+      const { error } = await supabase.from("suppliers").insert([{
+        ...formData,
+        sort_order: maxOrder + 1,
+      }]);
 
       if (error) {
         alert("新增失敗：" + error.message);
@@ -103,14 +217,20 @@ export default function SuppliersPage() {
 
   async function handlePin(id: string, currentIsPinned: boolean) {
     const supabase = createClient();
-    const maxOrder = Math.max(...suppliers.map((s) => s.sort_order), 0);
-    
+
+    const updateData: Record<string, boolean | number> = {
+      is_pinned: !currentIsPinned,
+    };
+    if (!currentIsPinned) {
+      // 釘選時移到最上方
+      const maxOrder = Math.max(...suppliers.map((s) => s.sort_order), 0);
+      updateData.sort_order = maxOrder + 1;
+    }
+    // 取消釘選時保留原本的 sort_order 不變
+
     const { error } = await supabase
       .from("suppliers")
-      .update({
-        is_pinned: !currentIsPinned,
-        sort_order: !currentIsPinned ? maxOrder + 1 : 0,
-      })
+      .update(updateData)
       .eq("id", id);
 
     if (error) {
@@ -121,54 +241,56 @@ export default function SuppliersPage() {
     fetchSuppliers();
   }
 
-  async function handleSort(id: string, direction: "up" | "down") {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const activeItem = suppliers.find((s) => s.id === active.id);
+    const overItem = suppliers.find((s) => s.id === over.id);
+
+    if (!activeItem || !overItem) return;
+
+    if (activeItem.is_pinned !== overItem.is_pinned) return;
+
+    const oldIndex = suppliers.findIndex((s) => s.id === active.id);
+    const newIndex = suppliers.findIndex((s) => s.id === over.id);
+
+    const newSuppliers = arrayMove(suppliers, oldIndex, newIndex);
+    setSuppliers(newSuppliers);
+
     const supabase = createClient();
-    const currentIndex = suppliers.findIndex((s) => s.id === id);
-    if (currentIndex === -1) return;
+    const pinnedGroup = newSuppliers.filter((s) => s.is_pinned);
+    const unpinnedGroup = newSuppliers.filter((s) => !s.is_pinned);
 
-    const currentItem = suppliers[currentIndex];
-    let targetItem: Supplier | null = null;
+    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
+      id: item.id,
+      sort_order: newSuppliers.length - idx,
+    }));
 
-    if (direction === "up") {
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        if (suppliers[i].is_pinned === currentItem.is_pinned) {
-          targetItem = suppliers[i];
-          break;
-        }
-      }
-    } else {
-      for (let i = currentIndex + 1; i < suppliers.length; i++) {
-        if (suppliers[i].is_pinned === currentItem.is_pinned) {
-          targetItem = suppliers[i];
-          break;
-        }
-      }
+    for (const update of updates) {
+      await supabase
+        .from("suppliers")
+        .update({ sort_order: update.sort_order })
+        .eq("id", update.id);
     }
-
-    if (!targetItem) return;
-
-    const { error } = await supabase
-      .from("suppliers")
-      .update({ sort_order: targetItem.sort_order })
-      .eq("id", id);
-
-    if (error) {
-      alert("排序失敗：" + error.message);
-      return;
-    }
-
-    const { error: error2 } = await supabase
-      .from("suppliers")
-      .update({ sort_order: currentItem.sort_order })
-      .eq("id", targetItem.id);
-
-    if (error2) {
-      alert("排序失敗：" + error2.message);
-      return;
-    }
-
-    fetchSuppliers();
   }
+
+  const filteredSuppliers = suppliers.filter((supplier) => {
+    const query = searchQuery.toLowerCase();
+    return supplier.name.toLowerCase().includes(query);
+  });
 
   if (loading) {
     return (
@@ -188,85 +310,50 @@ export default function SuppliersPage() {
         </Button>
       </div>
 
-      {suppliers.length === 0 ? (
+      <div className="mb-4">
+        <div className="relative">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="搜尋供應商名稱..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {filteredSuppliers.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <Warehouse size={48} className="mb-4" />
-          <p className="text-lg">尚無供應商資料</p>
-          <p className="text-sm mt-2">點擊上方按鈕新增第一個供應商</p>
+          <p className="text-lg">{suppliers.length === 0 ? "尚無供應商資料" : "找不到符合條件的供應商"}</p>
+          {suppliers.length === 0 && (
+            <p className="text-sm mt-2">點擊上方按鈕新增第一個供應商</p>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {suppliers.map((supplier, index) => {
-            const canMoveUp = suppliers.slice(0, index).some((s) => s.is_pinned === supplier.is_pinned);
-            const canMoveDown = suppliers.slice(index + 1).some((s) => s.is_pinned === supplier.is_pinned);
-            
-            return (
-              <Card
-                key={supplier.id}
-                className={`p-4 ${supplier.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
-                    {supplier.contact && (
-                      <p className="text-sm text-gray-500 mt-1">{supplier.contact}</p>
-                    )}
-                    {supplier.notes && (
-                      <p className="text-sm text-gray-500 mt-1">{supplier.notes}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => handlePin(supplier.id, supplier.is_pinned)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                      title={supplier.is_pinned ? "取消釘選" : "釘選"}
-                    >
-                      {supplier.is_pinned ? (
-                        <PinOff size={16} className="text-orange-500" />
-                      ) : (
-                        <Pin size={16} className="text-gray-400" />
-                      )}
-                    </button>
-                    <Link
-                      href={`/suppliers/${supplier.id}`}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <ExternalLink size={16} className="text-blue-600" />
-                    </Link>
-                    <button
-                      onClick={() => openModal(supplier)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <Edit2 size={16} className="text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(supplier.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 size={16} className="text-red-500" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-1 mt-2">
-                  <button
-                    onClick={() => handleSort(supplier.id, "up")}
-                    disabled={!canMoveUp}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <ChevronUp size={14} className="text-gray-600" />
-                  </button>
-                  <button
-                    onClick={() => handleSort(supplier.id, "down")}
-                    disabled={!canMoveDown}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <ChevronDown size={14} className="text-gray-600" />
-                  </button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredSuppliers.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredSuppliers.map((supplier) => (
+                <SortableSupplierCard
+                  key={supplier.id}
+                  supplier={supplier}
+                  onPin={handlePin}
+                  onEdit={openModal}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <Modal

@@ -18,13 +18,134 @@ import {
   Edit2,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   Pin,
   PinOff,
+  GripVertical,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Product, ColorVariant, StockLog } from "@/types";
+
+function SortableVariantCard({
+  variant,
+  onPin,
+  onLog,
+  onEdit,
+  onDelete,
+}: {
+  variant: ColorVariant;
+  onPin: (id: string, isPinned: boolean) => void;
+  onLog: (variant: ColorVariant) => void;
+  onEdit: (variant: ColorVariant) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: variant.id,
+    data: { isPinned: variant.is_pinned },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const available = variant.purchased - variant.defective - variant.sold;
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 ${variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div
+            className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-gray-400 hover:text-gray-600 touch-none"
+            title="拖曳排序"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={14} />
+          </div>
+          <h3 className="font-semibold text-gray-900">{variant.color}</h3>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => onPin(variant.id, variant.is_pinned)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            title={variant.is_pinned ? "取消釘選" : "釘選"}
+          >
+            {variant.is_pinned ? (
+              <PinOff size={14} className="text-orange-500" />
+            ) : (
+              <Pin size={14} className="text-gray-400" />
+            )}
+          </button>
+          <Button size="sm" variant="secondary" onClick={() => onLog(variant)}>
+            記錄
+          </Button>
+          <button
+            onClick={() => onEdit(variant)}
+            className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            <Edit2 size={14} className="text-blue-500" />
+          </button>
+          <button
+            onClick={() => onDelete(variant.id)}
+            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={14} className="text-red-500" />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2 text-center">
+        <div>
+          <p className="text-lg font-bold">{variant.purchased}</p>
+          <p className="text-xs text-gray-500">進貨</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold text-yellow-600">{variant.defective}</p>
+          <p className="text-xs text-gray-500">瑕疵</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold text-red-600">{variant.sold}</p>
+          <p className="text-xs text-gray-500">已售</p>
+        </div>
+        <div>
+          <p className={`text-lg font-bold ${available > 0 ? "text-green-600" : "text-red-600"}`}>
+            {available}
+          </p>
+          <p className="text-xs text-gray-500">庫存</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -103,7 +224,8 @@ export default function ProductDetailPage() {
           .select("*")
           .eq("product_id", productId)
           .order("is_pinned", { ascending: false })
-          .order("sort_order", { ascending: false }),
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true }),
         supabase.from("sales_orders").select("client_code"),
       ]);
 
@@ -159,11 +281,14 @@ export default function ProductDetailPage() {
     e.preventDefault();
     const supabase = createClient();
 
+    const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
+
     const { error } = await supabase.from("color_variants").insert([
       {
         product_id: productId,
         color: colorForm.color,
         size: colorForm.size || null,
+        sort_order: maxOrder + 1,
       },
     ]);
 
@@ -182,13 +307,16 @@ export default function ProductDetailPage() {
     e.preventDefault();
     const supabase = createClient();
 
-    const insertData: { product_id: string; color: string; size: string | null }[] = [];
+    const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
+
+    const insertData: { product_id: string; color: string; size: string | null; sort_order: number }[] = [];
     
     if (sizeForm.color) {
       insertData.push({
         product_id: productId,
         color: sizeForm.color,
         size: sizeForm.size || null,
+        sort_order: maxOrder + 1,
       });
     }
 
@@ -366,14 +494,20 @@ export default function ProductDetailPage() {
 
   async function handlePinVariant(id: string, currentIsPinned: boolean) {
     const supabase = createClient();
-    const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
-    
+
+    const updateData: Record<string, boolean | number> = {
+      is_pinned: !currentIsPinned,
+    };
+    if (!currentIsPinned) {
+      // 釘選時移到最上方
+      const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
+      updateData.sort_order = maxOrder + 1;
+    }
+    // 取消釘選時保留原本的 sort_order 不變
+
     const { error } = await supabase
       .from("color_variants")
-      .update({
-        is_pinned: !currentIsPinned,
-        sort_order: !currentIsPinned ? maxOrder + 1 : 0,
-      })
+      .update(updateData)
       .eq("id", id);
 
     if (error) {
@@ -384,53 +518,72 @@ export default function ProductDetailPage() {
     fetchData();
   }
 
-  async function handleSortVariant(id: string, direction: "up" | "down") {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const activeVariant = variants.find((v) => v.id === active.id);
+    const overVariant = variants.find((v) => v.id === over.id);
+
+    if (!activeVariant || !overVariant) return;
+
+    const activeSize = activeVariant.size || "均碼";
+    const overSize = overVariant.size || "均碼";
+
+    if (activeSize !== overSize) return;
+    if (activeVariant.is_pinned !== overVariant.is_pinned) return;
+
+    const sizeVariants = variants.filter((v) => (v.size || "均碼") === activeSize);
+    const oldIndex = sizeVariants.findIndex((v) => v.id === active.id);
+    const newIndex = sizeVariants.findIndex((v) => v.id === over.id);
+
+    const newSizeVariants = arrayMove(sizeVariants, oldIndex, newIndex);
+
+    const newVariants = variants.map((v) => {
+      if ((v.size || "均碼") !== activeSize) return v;
+      const updated = newSizeVariants.find((nv) => nv.id === v.id);
+      return updated || v;
+    });
+
+    setVariants(newVariants);
+
     const supabase = createClient();
-    const currentIndex = variants.findIndex((v) => v.id === id);
-    if (currentIndex === -1) return;
+    const pinnedGroup = newSizeVariants.filter((v) => v.is_pinned);
+    const unpinnedGroup = newSizeVariants.filter((v) => !v.is_pinned);
 
-    const currentItem = variants[currentIndex];
-    let targetItem: ColorVariant | null = null;
+    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
+      id: item.id,
+      sort_order: newSizeVariants.length - idx,
+    }));
 
-    if (direction === "up") {
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        if (variants[i].is_pinned === currentItem.is_pinned) {
-          targetItem = variants[i];
-          break;
-        }
+    for (const update of updates) {
+      await supabase
+        .from("color_variants")
+        .update({ sort_order: update.sort_order })
+        .eq("id", update.id);
+    }
+
+    // 同步更新 React state 中的 sort_order，確保後續操作（如記錄庫存）拿到正確的值
+    const variantsWithSyncedSortOrder = newVariants.map((v) => {
+      const update = updates.find((u) => u.id === v.id);
+      if (update) {
+        return { ...v, sort_order: update.sort_order };
       }
-    } else {
-      for (let i = currentIndex + 1; i < variants.length; i++) {
-        if (variants[i].is_pinned === currentItem.is_pinned) {
-          targetItem = variants[i];
-          break;
-        }
-      }
-    }
-
-    if (!targetItem) return;
-
-    const { error } = await supabase
-      .from("color_variants")
-      .update({ sort_order: targetItem.sort_order })
-      .eq("id", id);
-
-    if (error) {
-      alert("排序失敗：" + error.message);
-      return;
-    }
-
-    const { error: error2 } = await supabase
-      .from("color_variants")
-      .update({ sort_order: currentItem.sort_order })
-      .eq("id", targetItem.id);
-
-    if (error2) {
-      alert("排序失敗：" + error2.message);
-      return;
-    }
-
-    fetchData();
+      return v;
+    });
+    setVariants(variantsWithSyncedSortOrder);
   }
 
   if (loading) {
@@ -529,163 +682,88 @@ export default function ProductDetailPage() {
             尚無款式資料
           </Card>
         ) : (
-          <div className="space-y-4">
-            {sizeOrder.map((size) => {
-              const isExpanded = expandedSizes.has(size);
-              const sizeVariants = variantsBySize[size];
-              return (
-                <div key={size} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleSize(size)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      {isExpanded ? (
-                        <ChevronDown size={18} className="text-gray-500" />
-                      ) : (
-                        <ChevronRight size={18} className="text-gray-500" />
-                      )}
-                      <span className="font-semibold text-gray-900">尺寸：{size}</span>
-                      <span className="text-sm text-gray-500">({sizeVariants.length} 色)</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-600">
-                        庫存：
-                        <span className="font-bold text-green-600">
-                          {sizeVariants.reduce((sum, v) => sum + (v.purchased - v.defective - v.sold), 0)}
-                        </span>
-                      </span>
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="p-3">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
-                        {sizeVariants.map((variant) => {
-                          const available = variant.purchased - variant.defective - variant.sold;
-                          const sizePinnedVariants = sizeVariants.filter((v) => v.is_pinned === variant.is_pinned);
-                          const pinnedIndex = sizePinnedVariants.findIndex((v) => v.id === variant.id);
-                          const canMoveUp = pinnedIndex > 0;
-                          const canMoveDown = pinnedIndex < sizePinnedVariants.length - 1;
-                          
-                          return (
-                            <Card
-                              key={variant.id}
-                              className={`p-4 ${variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-semibold text-gray-900">
-                                  {variant.color}
-                                </h3>
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={() => handlePinVariant(variant.id, variant.is_pinned)}
-                                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                                    title={variant.is_pinned ? "取消釘選" : "釘選"}
-                                  >
-                                    {variant.is_pinned ? (
-                                      <PinOff size={14} className="text-orange-500" />
-                                    ) : (
-                                      <Pin size={14} className="text-gray-400" />
-                                    )}
-                                  </button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => {
-                                      setSelectedVariant(variant);
-                                      setIsLogModalOpen(true);
-                                    }}
-                                  >
-                                    記錄
-                                  </Button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingVariant(variant);
-                                      setEditForm({
-                                        color: variant.color,
-                                        size: variant.size || "",
-                                      });
-                                      setIsEditVariantModalOpen(true);
-                                    }}
-                                    className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                                  >
-                                    <Edit2 size={14} className="text-blue-500" />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteVariant(variant.id)}
-                                    className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                  >
-                                    <Trash2 size={14} className="text-red-500" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-4 gap-2 text-center">
-                                <div>
-                                  <p className="text-lg font-bold">{variant.purchased}</p>
-                                  <p className="text-xs text-gray-500">進貨</p>
-                                </div>
-                                <div>
-                                  <p className="text-lg font-bold text-yellow-600">
-                                    {variant.defective}
-                                  </p>
-                                  <p className="text-xs text-gray-500">瑕疵</p>
-                                </div>
-                                <div>
-                                  <p className="text-lg font-bold text-red-600">
-                                    {variant.sold}
-                                  </p>
-                                  <p className="text-xs text-gray-500">已售</p>
-                                </div>
-                                <div>
-                                  <p
-                                    className={`text-lg font-bold ${
-                                      available > 0 ? "text-green-600" : "text-red-600"
-                                    }`}
-                                  >
-                                    {available}
-                                  </p>
-                                  <p className="text-xs text-gray-500">庫存</p>
-                                </div>
-                              </div>
-                              <div className="flex justify-end gap-1 mt-2">
-                                <button
-                                  onClick={() => handleSortVariant(variant.id, "up")}
-                                  disabled={!canMoveUp}
-                                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                  <ChevronUp size={14} className="text-gray-600" />
-                                </button>
-                                <button
-                                  onClick={() => handleSortVariant(variant.id, "down")}
-                                  disabled={!canMoveDown}
-                                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                  <ChevronDown size={14} className="text-gray-600" />
-                                </button>
-                              </div>
-                            </Card>
-                          );
-                        })}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="space-y-4">
+              {sizeOrder.map((size) => {
+                const isExpanded = expandedSizes.has(size);
+                const sizeVariants = variantsBySize[size];
+                return (
+                  <div key={size} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleSize(size)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown size={18} className="text-gray-500" />
+                        ) : (
+                          <ChevronRight size={18} className="text-gray-500" />
+                        )}
+                        <span className="font-semibold text-gray-900">尺寸：{size}</span>
+                        <span className="text-sm text-gray-500">({sizeVariants.length} 色)</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedSize(size);
-                          setColorForm({ color: "", size: size === "均碼" ? "" : size });
-                          setIsAddColorModalOpen(true);
-                        }}
-                        className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 transition-colors"
-                      >
-                        <Plus size={14} className="inline mr-1" />
-                        新增顏色
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-gray-600">
+                          庫存：
+                          <span className="font-bold text-green-600">
+                            {sizeVariants.reduce((sum, v) => sum + (v.purchased - v.defective - v.sold), 0)}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+                    {isExpanded && (
+                      <div className="p-3">
+                        <SortableContext
+                          items={sizeVariants.map((v) => v.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                            {sizeVariants.map((variant) => (
+                              <SortableVariantCard
+                                key={variant.id}
+                                variant={variant}
+                                onPin={handlePinVariant}
+                                onLog={(v) => {
+                                  setSelectedVariant(v);
+                                  setIsLogModalOpen(true);
+                                }}
+                                onEdit={(v) => {
+                                  setEditingVariant(v);
+                                  setEditForm({
+                                    color: v.color,
+                                    size: v.size || "",
+                                  });
+                                  setIsEditVariantModalOpen(true);
+                                }}
+                                onDelete={deleteVariant}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSize(size);
+                            setColorForm({ color: "", size: size === "均碼" ? "" : size });
+                            setIsAddColorModalOpen(true);
+                          }}
+                          className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 transition-colors"
+                        >
+                          <Plus size={14} className="inline mr-1" />
+                          新增顏色
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </DndContext>
         )}
       </div>
 

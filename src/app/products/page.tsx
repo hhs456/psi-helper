@@ -8,12 +8,139 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Package, X, ExternalLink, Pin, PinOff, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, X, ExternalLink, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Product, Supplier } from "@/types";
 
 type ProductWithSupplier = Omit<Product, "supplier"> & {
   supplier: Supplier | null;
 };
+
+function SortableProductCard({
+  product,
+  onPin,
+  onEdit,
+  onDelete,
+}: {
+  product: ProductWithSupplier;
+  onPin: (id: string, isPinned: boolean) => void;
+  onEdit: (product: ProductWithSupplier) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: product.id,
+    data: { isPinned: product.is_pinned },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={`overflow-hidden ${product.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+    >
+      <div className="flex">
+        <div
+          className="w-8 flex-shrink-0 flex items-center justify-center bg-gray-50 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 hover:bg-gray-100 touch-none"
+          title="拖曳排序"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={16} />
+        </div>
+        <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <Package className="text-gray-400" size={24} />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 p-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-sm">
+                {product.name}
+              </h3>
+              {product.code && (
+                <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
+              )}
+              {product.supplier?.name && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {product.supplier.name}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => onPin(product.id, product.is_pinned)}
+                className="p-1 rounded hover:bg-gray-100"
+                title={product.is_pinned ? "取消釘選" : "釘選"}
+              >
+                {product.is_pinned ? (
+                  <PinOff size={14} className="text-orange-500" />
+                ) : (
+                  <Pin size={14} className="text-gray-400" />
+                )}
+              </button>
+              <Link
+                href={`/products/${product.id}`}
+                className="p-1 rounded hover:bg-gray-100"
+              >
+                <ExternalLink size={14} className="text-blue-600" />
+              </Link>
+              <button
+                onClick={() => onEdit(product)}
+                className="p-1 rounded hover:bg-gray-100"
+              >
+                <Edit2 size={14} className="text-gray-600" />
+              </button>
+              <button
+                onClick={() => onDelete(product.id)}
+                className="p-1 rounded hover:bg-red-50"
+              >
+                <Trash2 size={14} className="text-red-500" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<ProductWithSupplier[]>([]);
@@ -29,6 +156,7 @@ export default function ProductsPage() {
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -49,7 +177,8 @@ export default function ProductsPage() {
             )
           `)
           .order("is_pinned", { ascending: false })
-          .order("sort_order", { ascending: false }),
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true }),
         supabase.from("suppliers").select("*").order("name"),
       ]);
 
@@ -165,7 +294,11 @@ export default function ProductsPage() {
         return;
       }
     } else {
-      const { error } = await supabase.from("products").insert([productData]);
+      const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
+      const { error } = await supabase.from("products").insert([{
+        ...productData,
+        sort_order: maxOrder + 1,
+      }]);
 
       if (error) {
         alert("新增失敗：" + error.message);
@@ -193,14 +326,20 @@ export default function ProductsPage() {
 
   async function handlePin(id: string, currentIsPinned: boolean) {
     const supabase = createClient();
-    const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
-    
+
+    const updateData: Record<string, boolean | number> = {
+      is_pinned: !currentIsPinned,
+    };
+    if (!currentIsPinned) {
+      // 釘選時移到最上方
+      const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
+      updateData.sort_order = maxOrder + 1;
+    }
+    // 取消釘選時保留原本的 sort_order 不變
+
     const { error } = await supabase
       .from("products")
-      .update({
-        is_pinned: !currentIsPinned,
-        sort_order: !currentIsPinned ? maxOrder + 1 : 0,
-      })
+      .update(updateData)
       .eq("id", id);
 
     if (error) {
@@ -211,54 +350,59 @@ export default function ProductsPage() {
     fetchData();
   }
 
-  async function handleSort(id: string, direction: "up" | "down") {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const activeItem = products.find((p) => p.id === active.id);
+    const overItem = products.find((p) => p.id === over.id);
+
+    if (!activeItem || !overItem) return;
+
+    if (activeItem.is_pinned !== overItem.is_pinned) return;
+
+    const oldIndex = products.findIndex((p) => p.id === active.id);
+    const newIndex = products.findIndex((p) => p.id === over.id);
+
+    const newProducts = arrayMove(products, oldIndex, newIndex);
+    setProducts(newProducts);
+
     const supabase = createClient();
-    const currentIndex = products.findIndex((p) => p.id === id);
-    if (currentIndex === -1) return;
+    const pinnedGroup = newProducts.filter((p) => p.is_pinned);
+    const unpinnedGroup = newProducts.filter((p) => !p.is_pinned);
 
-    const currentItem = products[currentIndex];
-    let targetItem: ProductWithSupplier | null = null;
+    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
+      id: item.id,
+      sort_order: newProducts.length - idx,
+    }));
 
-    if (direction === "up") {
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        if (products[i].is_pinned === currentItem.is_pinned) {
-          targetItem = products[i];
-          break;
-        }
-      }
-    } else {
-      for (let i = currentIndex + 1; i < products.length; i++) {
-        if (products[i].is_pinned === currentItem.is_pinned) {
-          targetItem = products[i];
-          break;
-        }
-      }
+    for (const update of updates) {
+      await supabase
+        .from("products")
+        .update({ sort_order: update.sort_order })
+        .eq("id", update.id);
     }
-
-    if (!targetItem) return;
-
-    const { error } = await supabase
-      .from("products")
-      .update({ sort_order: targetItem.sort_order })
-      .eq("id", id);
-
-    if (error) {
-      alert("排序失敗：" + error.message);
-      return;
-    }
-
-    const { error: error2 } = await supabase
-      .from("products")
-      .update({ sort_order: currentItem.sort_order })
-      .eq("id", targetItem.id);
-
-    if (error2) {
-      alert("排序失敗：" + error2.message);
-      return;
-    }
-
-    fetchData();
   }
+
+  const filteredProducts = products.filter((product) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      product.name.toLowerCase().includes(query) ||
+      (product.code && product.code.toLowerCase().includes(query))
+    );
+  });
 
   if (loading) {
     return (
@@ -278,106 +422,50 @@ export default function ProductsPage() {
         </Button>
       </div>
 
-      {products.length === 0 ? (
+      <div className="mb-4">
+        <div className="relative">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="搜尋商品名稱或編號..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {filteredProducts.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <Package size={48} className="mb-4" />
-          <p className="text-lg">尚無商品資料</p>
-          <p className="text-sm mt-2">點擊上方按鈕新增第一個商品</p>
+          <p className="text-lg">{products.length === 0 ? "尚無商品資料" : "找不到符合條件的商品"}</p>
+          {products.length === 0 && (
+            <p className="text-sm mt-2">點擊上方按鈕新增第一個商品</p>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((product, index) => {
-            const canMoveUp = products.slice(0, index).some((p) => p.is_pinned === product.is_pinned);
-            const canMoveDown = products.slice(index + 1).some((p) => p.is_pinned === product.is_pinned);
-            
-            return (
-              <Card
-                key={product.id}
-                className={`overflow-hidden ${product.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
-              >
-                <div className="flex">
-                  <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
-                    {product.image_url ? (
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <Package className="text-gray-400" size={24} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 p-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-gray-900 text-sm">
-                          {product.name}
-                        </h3>
-                        {product.code && (
-                          <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
-                        )}
-                        {product.supplier?.name && (
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {product.supplier.name}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handlePin(product.id, product.is_pinned)}
-                          className="p-1 rounded hover:bg-gray-100"
-                          title={product.is_pinned ? "取消釘選" : "釘選"}
-                        >
-                          {product.is_pinned ? (
-                            <PinOff size={14} className="text-orange-500" />
-                          ) : (
-                            <Pin size={14} className="text-gray-400" />
-                          )}
-                        </button>
-                        <Link
-                          href={`/products/${product.id}`}
-                          className="p-1 rounded hover:bg-gray-100"
-                        >
-                          <ExternalLink size={14} className="text-blue-600" />
-                        </Link>
-                        <button
-                          onClick={() => openModal(product)}
-                          className="p-1 rounded hover:bg-gray-100"
-                        >
-                          <Edit2 size={14} className="text-gray-600" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product.id)}
-                          className="p-1 rounded hover:bg-red-50"
-                        >
-                          <Trash2 size={14} className="text-red-500" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-1 mt-2">
-                      <button
-                        onClick={() => handleSort(product.id, "up")}
-                        disabled={!canMoveUp}
-                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <ChevronUp size={14} className="text-gray-600" />
-                      </button>
-                      <button
-                        onClick={() => handleSort(product.id, "down")}
-                        disabled={!canMoveDown}
-                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <ChevronDown size={14} className="text-gray-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredProducts.map((p) => p.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredProducts.map((product) => (
+                <SortableProductCard
+                  key={product.id}
+                  product={product}
+                  onPin={handlePin}
+                  onEdit={openModal}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <Modal
