@@ -5,6 +5,14 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.2.1] - 2026-09-11
+
+### 修復
+
+- **登入跳轉**：改用 `window.location.href` 取代 `router.push` + `router.refresh`，解決登入後偶爾不跳轉的問題
+- **取消訂單庫存回退**：取消訂單時現在會正確回退 `color_variants.sold` 並新增 `stock_logs` 記錄
+- **刪除已取消訂單**：刪除狀態為 cancelled 的訂單時不會重複回退庫存
+
 ## [0.2.0] - 2026-09-11
 
 ### 新增功能
