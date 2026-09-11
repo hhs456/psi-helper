@@ -45,6 +45,8 @@ export default function SupplierDetailPage() {
   const [productForm, setProductForm] = useState({ name: "", code: "", notes: "" });
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
+  const [isProductEdit, setIsProductEdit] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   useEffect(() => {
     if (supplierId) {
@@ -134,6 +136,8 @@ export default function SupplierDetailPage() {
     setProductForm({ name: "", code: "", notes: "" });
     setProductImageFile(null);
     setProductImagePreview(null);
+    setIsProductEdit(false);
+    setEditingProductId(null);
     setIsAddProductModalOpen(true);
   }
 
@@ -142,6 +146,8 @@ export default function SupplierDetailPage() {
     setProductForm({ name: "", code: "", notes: "" });
     setProductImageFile(null);
     setProductImagePreview(null);
+    setIsProductEdit(false);
+    setEditingProductId(null);
   }
 
   function handleProductImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -219,6 +225,63 @@ export default function SupplierDetailPage() {
     fetchData();
   }
 
+  function openEditProductModal(product: Product) {
+    setProductForm({
+      name: product.name,
+      code: product.code || "",
+      notes: product.notes || "",
+    });
+    setProductImagePreview(product.image_url || null);
+    setProductImageFile(null);
+    setIsProductEdit(true);
+    setEditingProductId(product.id);
+    setIsAddProductModalOpen(true);
+  }
+
+  async function handleUpdateProduct(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingProductId) return;
+    const supabase = createClient();
+
+    let imageUrl = productImagePreview;
+    if (productImageFile) {
+      const uploadedUrl = await uploadProductImage();
+      if (uploadedUrl) imageUrl = uploadedUrl;
+    }
+
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name: productForm.name,
+        code: productForm.code || null,
+        notes: productForm.notes || null,
+        image_url: imageUrl,
+      })
+      .eq("id", editingProductId);
+
+    if (error) {
+      alert("更新商品失敗：" + error.message);
+      return;
+    }
+
+    closeAddProductModal();
+    fetchData();
+  }
+
+  async function handleDeleteProduct(productId: string) {
+    if (!confirm("確定要刪除此商品嗎？")) return;
+
+    const supabase = createClient();
+    const { error } = await supabase.from("products").delete().eq("id", productId);
+
+    if (error) {
+      alert("刪除商品失敗：" + error.message);
+      return;
+    }
+
+    fetchData();
+  }
+
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => {
     const variants = p.variants || [];
@@ -281,12 +344,10 @@ export default function SupplierDetailPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={openEditModal}>
-              <Edit2 size={16} className="mr-1" />
-              編輯
+              <Edit2 size={16} />
             </Button>
             <Button variant="danger" onClick={handleDelete}>
-              <Trash2 size={16} className="mr-1" />
-              刪除
+              <Trash2 size={16} />
             </Button>
           </div>
         </div>
@@ -314,39 +375,53 @@ export default function SupplierDetailPage() {
                 0
               );
               return (
-                <Link key={product.id} href={`/products/${product.id}`}>
-                  <Card className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="flex">
-                      <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
-                        {product.image_url ? (
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <Package className="text-gray-400" size={24} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 p-3">
-                        <h3 className="font-semibold text-gray-900 text-sm">
+                <Card key={product.id} className="overflow-hidden">
+                  <div className="flex">
+                    <Link href={`/products/${product.id}`} className="w-20 h-20 flex-shrink-0 bg-gray-100 block">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <Package className="text-gray-400" size={24} />
+                        </div>
+                      )}
+                    </Link>
+                    <div className="flex-1 p-3">
+                      <Link href={`/products/${product.id}`}>
+                        <h3 className="font-semibold text-gray-900 text-sm hover:text-blue-600 transition-colors">
                           {product.name}
                         </h3>
-                        {product.code && (
-                          <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
-                        )}
-                        <div className="flex items-center gap-3 mt-2 text-xs">
-                          <span className="text-gray-500">{variants.length} 款</span>
-                          <span className={stock > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                            庫存：{stock}
-                          </span>
-                        </div>
+                      </Link>
+                      {product.code && (
+                        <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-2 text-xs">
+                        <span className="text-gray-500">{variants.length} 款</span>
+                        <span className={stock > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                          庫存：{stock}
+                        </span>
                       </div>
                     </div>
-                  </Card>
-                </Link>
+                    <div className="flex flex-col gap-1 pr-2 justify-center">
+                      <button
+                        onClick={() => openEditProductModal(product)}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <Edit2 size={14} className="text-gray-600" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={14} className="text-red-500" />
+                      </button>
+                    </div>
+                  </div>
+                </Card>
               );
             })}
           </div>
@@ -396,9 +471,9 @@ export default function SupplierDetailPage() {
       <Modal
         isOpen={isAddProductModalOpen}
         onClose={closeAddProductModal}
-        title="新增商品"
+        title={isProductEdit ? "編輯商品" : "新增商品"}
       >
-        <form onSubmit={handleAddProduct} className="space-y-4">
+        <form onSubmit={isProductEdit ? handleUpdateProduct : handleAddProduct} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               商品圖片
@@ -457,11 +532,26 @@ export default function SupplierDetailPage() {
             />
           </div>
 
-          <div className="flex gap-2 justify-end pt-4">
-            <Button type="button" variant="secondary" onClick={closeAddProductModal}>
-              取消
-            </Button>
-            <Button type="submit">新增</Button>
+          <div className="flex gap-2 justify-between pt-4">
+            {isProductEdit ? (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  if (editingProductId) handleDeleteProduct(editingProductId);
+                }}
+              >
+                <Trash2 size={16} />
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={closeAddProductModal}>
+                取消
+              </Button>
+              <Button type="submit">{isProductEdit ? "更新" : "新增"}</Button>
+            </div>
           </div>
         </form>
       </Modal>

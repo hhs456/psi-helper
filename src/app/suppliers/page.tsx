@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Warehouse, ExternalLink, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, GripVertical, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -73,7 +73,9 @@ function SortableSupplierCard({
             <GripVertical size={16} />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
+            <Link href={`/suppliers/${supplier.id}`}>
+              <h3 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">{supplier.name}</h3>
+            </Link>
             {supplier.contact && (
               <p className="text-sm text-gray-500 mt-1">{supplier.contact}</p>
             )}
@@ -94,12 +96,6 @@ function SortableSupplierCard({
               <Pin size={16} className="text-gray-400" />
             )}
           </button>
-          <Link
-            href={`/suppliers/${supplier.id}`}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ExternalLink size={16} className="text-blue-600" />
-          </Link>
           <button
             onClick={() => onEdit(supplier)}
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
