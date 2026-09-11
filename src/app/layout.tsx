@@ -41,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex">
         <PWARegister />
         <Sidebar />
-        <main className="flex-1 ml-0 md:ml-64 min-h-screen">
+        <main className="flex-1 ml-0 md:ml-64 min-h-screen pt-14 md:pt-0">
           <div className="p-4 md:p-6 lg:p-8">
             {children}
           </div>
