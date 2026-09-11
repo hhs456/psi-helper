@@ -28,6 +28,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useProducts } from "@/lib/hooks";
+import { Pagination } from "@/components/ui/Pagination";
 import type { Product, Supplier } from "@/types";
 
 type ProductWithSupplier = Omit<Product, "supplier"> & {
@@ -140,8 +141,8 @@ function SortableProductCard({
   );
 }
 
-export function ProductsClient() {
-  const { products, suppliers, isLoading, error, mutate } = useProducts();
+export function ProductsClient({ currentPage, pageSize }: { currentPage: number; pageSize: number }) {
+  const { products, suppliers, totalPages, isLoading, error, mutate } = useProducts(currentPage, pageSize);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithSupplier | null>(null);
   const [formData, setFormData] = useState({
@@ -524,6 +525,7 @@ export function ProductsClient() {
           </div>
         </form>
       </Modal>
+      <Pagination currentPage={currentPage} totalPages={totalPages} basePath="/products" />
     </>
   );
 }

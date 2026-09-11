@@ -104,10 +104,13 @@ export function useSuppliers() {
   };
 }
 
-export function useProducts() {
+export function useProducts(page: number = 1, pageSize: number = 20) {
   const fetcher = async () => {
     const supabase = createClient();
-    const [productsRes, suppliersRes] = await Promise.all([
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const [productsRes, suppliersRes, countRes] = await Promise.all([
       supabase
         .from("products")
         .select(`
@@ -119,18 +122,25 @@ export function useProducts() {
         `)
         .order("is_pinned", { ascending: false })
         .order("sort_order", { ascending: false })
-        .order("created_at", { ascending: true }),
+        .order("created_at", { ascending: true })
+        .range(from, to),
       supabase.from("suppliers").select("*").order("name"),
+      supabase.from("products").select("id", { count: "exact", head: true }),
     ]);
 
     if (productsRes.error) throw productsRes.error;
+    
+    const totalProducts = countRes.count || 0;
+    const totalPages = Math.ceil(totalProducts / pageSize);
+
     return {
       products: (productsRes.data || []) as ProductWithSupplier[],
       suppliers: (suppliersRes.data || []) as Supplier[],
+      totalPages,
     };
   };
 
-  const { data, error, isLoading, mutate } = useSWR("products", fetcher, {
+  const { data, error, isLoading, mutate } = useSWR(["products", page, pageSize], fetcher, {
     revalidateOnFocus: false,
     revalidateIfStale: false,
     dedupingInterval: 60000,
@@ -139,6 +149,7 @@ export function useProducts() {
   return {
     products: data?.products || [],
     suppliers: data?.suppliers || [],
+    totalPages: data?.totalPages || 1,
     isLoading,
     error,
     mutate,
