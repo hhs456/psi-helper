@@ -454,8 +454,6 @@ export default function ProductDetailPage() {
       .update({
         color: editForm.color,
         size: editForm.size || null,
-        sort_order: editingVariant.sort_order,
-        is_pinned: editingVariant.is_pinned,
       })
       .eq("id", editingVariant.id);
 
@@ -563,6 +561,16 @@ export default function ProductDetailPage() {
         .update({ sort_order: update.sort_order })
         .eq("id", update.id);
     }
+
+    // 同步更新 React state 中的 sort_order，確保後續操作（如記錄庫存）拿到正確的值
+    const variantsWithSyncedSortOrder = newVariants.map((v) => {
+      const update = updates.find((u) => u.id === v.id);
+      if (update) {
+        return { ...v, sort_order: update.sort_order };
+      }
+      return v;
+    });
+    setVariants(variantsWithSyncedSortOrder);
   }
 
   if (loading) {
