@@ -22,12 +22,10 @@ export default function LoginPage() {
     });
 
     if (res.ok) {
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     } else {
       setError("密碼錯誤");
     }
-    setLoading(false);
   }
 
   return (
