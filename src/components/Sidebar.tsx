@@ -6,8 +6,6 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   Package,
-  ShoppingCart,
-  TrendingUp,
   Menu,
   X,
   Warehouse,
@@ -18,8 +16,6 @@ const navigation = [
   { name: "庫存總覽", href: "/", icon: LayoutDashboard },
   { name: "供應商", href: "/suppliers", icon: Warehouse },
   { name: "商品管理", href: "/products", icon: Package },
-  { name: "銷售記錄", href: "/sales", icon: ShoppingCart },
-  { name: "報表分析", href: "/reports", icon: TrendingUp },
 ];
 
 export function Sidebar() {
