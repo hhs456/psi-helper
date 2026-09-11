@@ -5,6 +5,27 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.10.0] - 2026-09-11
+
+### 效能優化
+
+- **客戶端資料快取**：導入 SWR 進行客戶端資料擷取與快取，頁面切換不再等待伺服器回應
+  - 新增 `useInventory`、`useSuppliers`、`useProducts`、`useProductDetail` hooks
+  - 首次載入後，後續切換幾乎瞬間顯示（\< 100ms）
+  - 頁面切換不再觸發伺服器端重新渲染
+- **商品管理頁面全靜態化**：將 `searchParams`/`params` 讀取邏輯移至 Client Component
+  - `/products` 從 Partial Prerendering 改為全靜態頁面，導航時直接使用快取的 RSC payload
+- **商品詳情頁狀態同步修復**：修正 `useState` 初始化後未隨 SWR 資料更新而同步的問題
+
+### 架構改進
+
+- 所有主要頁面（庫存總覽、供應商、商品管理、商品詳情）統一使用 Client Components + SWR
+- 資料在客戶端快取，減少不必要的伺服器往返
+
+### 新增依賴
+
+- `swr`: 客戶端資料快取與重新驗證
+
 ## [0.9.0] - 2026-09-11
 
 ### 效能優化
