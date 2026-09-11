@@ -18,6 +18,9 @@ import {
   Edit2,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -53,6 +56,8 @@ export default function ProductDetailPage() {
   });
   const [nextClientCode, setNextClientCode] = useState("");
   const [expandedSizes, setExpandedSizes] = useState<Set<string>>(new Set());
+  const [expandSaleDetails, setExpandSaleDetails] = useState(false);
+  const [isLogSectionExpanded, setIsLogSectionExpanded] = useState(false);
 
   function toggleSize(size: string) {
     setExpandedSizes((prev) => {
@@ -97,7 +102,8 @@ export default function ProductDetailPage() {
           .from("color_variants")
           .select("*")
           .eq("product_id", productId)
-          .order("created_at", { ascending: true }),
+          .order("is_pinned", { ascending: false })
+          .order("sort_order", { ascending: false }),
         supabase.from("sales_orders").select("client_code"),
       ]);
 
@@ -219,7 +225,7 @@ export default function ProductDetailPage() {
       return;
     }
 
-    const updateData: any = {};
+    const updateData: Record<string, number> = {};
     if (logForm.type === "purchase") {
       updateData.purchased = selectedVariant.purchased + logForm.quantity;
     } else if (logForm.type === "defect") {
@@ -277,6 +283,7 @@ export default function ProductDetailPage() {
     setLogForm({ type: "purchase", quantity: 0, reference: "", customer_name: "", unit_price: 0 });
     setSelectedVariant(null);
     setIsLogModalOpen(false);
+    setExpandSaleDetails(false);
     fetchData();
   }
 
@@ -351,6 +358,75 @@ export default function ProductDetailPage() {
 
     if (error) {
       alert("刪除失敗：" + error.message);
+      return;
+    }
+
+    fetchData();
+  }
+
+  async function handlePinVariant(id: string, currentIsPinned: boolean) {
+    const supabase = createClient();
+    const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
+    
+    const { error } = await supabase
+      .from("color_variants")
+      .update({
+        is_pinned: !currentIsPinned,
+        sort_order: !currentIsPinned ? maxOrder + 1 : 0,
+      })
+      .eq("id", id);
+
+    if (error) {
+      alert("操作失敗：" + error.message);
+      return;
+    }
+
+    fetchData();
+  }
+
+  async function handleSortVariant(id: string, direction: "up" | "down") {
+    const supabase = createClient();
+    const currentIndex = variants.findIndex((v) => v.id === id);
+    if (currentIndex === -1) return;
+
+    const currentItem = variants[currentIndex];
+    let targetItem: ColorVariant | null = null;
+
+    if (direction === "up") {
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        if (variants[i].is_pinned === currentItem.is_pinned) {
+          targetItem = variants[i];
+          break;
+        }
+      }
+    } else {
+      for (let i = currentIndex + 1; i < variants.length; i++) {
+        if (variants[i].is_pinned === currentItem.is_pinned) {
+          targetItem = variants[i];
+          break;
+        }
+      }
+    }
+
+    if (!targetItem) return;
+
+    const { error } = await supabase
+      .from("color_variants")
+      .update({ sort_order: targetItem.sort_order })
+      .eq("id", id);
+
+    if (error) {
+      alert("排序失敗：" + error.message);
+      return;
+    }
+
+    const { error: error2 } = await supabase
+      .from("color_variants")
+      .update({ sort_order: currentItem.sort_order })
+      .eq("id", targetItem.id);
+
+    if (error2) {
+      alert("排序失敗：" + error2.message);
       return;
     }
 
@@ -487,13 +563,32 @@ export default function ProductDetailPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                         {sizeVariants.map((variant) => {
                           const available = variant.purchased - variant.defective - variant.sold;
+                          const sizePinnedVariants = sizeVariants.filter((v) => v.is_pinned === variant.is_pinned);
+                          const pinnedIndex = sizePinnedVariants.findIndex((v) => v.id === variant.id);
+                          const canMoveUp = pinnedIndex > 0;
+                          const canMoveDown = pinnedIndex < sizePinnedVariants.length - 1;
+                          
                           return (
-                            <Card key={variant.id} className="p-4">
+                            <Card
+                              key={variant.id}
+                              className={`p-4 ${variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+                            >
                               <div className="flex items-center justify-between mb-2">
                                 <h3 className="font-semibold text-gray-900">
                                   {variant.color}
                                 </h3>
                                 <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handlePinVariant(variant.id, variant.is_pinned)}
+                                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                                    title={variant.is_pinned ? "取消釘選" : "釘選"}
+                                  >
+                                    {variant.is_pinned ? (
+                                      <PinOff size={14} className="text-orange-500" />
+                                    ) : (
+                                      <Pin size={14} className="text-gray-400" />
+                                    )}
+                                  </button>
                                   <Button
                                     size="sm"
                                     variant="secondary"
@@ -553,6 +648,22 @@ export default function ProductDetailPage() {
                                   <p className="text-xs text-gray-500">庫存</p>
                                 </div>
                               </div>
+                              <div className="flex justify-end gap-1 mt-2">
+                                <button
+                                  onClick={() => handleSortVariant(variant.id, "up")}
+                                  disabled={!canMoveUp}
+                                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  <ChevronUp size={14} className="text-gray-600" />
+                                </button>
+                                <button
+                                  onClick={() => handleSortVariant(variant.id, "down")}
+                                  disabled={!canMoveDown}
+                                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  <ChevronDown size={14} className="text-gray-600" />
+                                </button>
+                              </div>
                             </Card>
                           );
                         })}
@@ -580,73 +691,88 @@ export default function ProductDetailPage() {
 
       {/* Stock Logs */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">異動記錄</h2>
+        <button
+          type="button"
+          onClick={() => setIsLogSectionExpanded(!isLogSectionExpanded)}
+          className="w-full flex items-center justify-between mb-4"
+        >
+          <h2 className="text-lg font-semibold text-gray-900">異動記錄</h2>
+          {isLogSectionExpanded ? (
+            <ChevronDown size={20} className="text-gray-500" />
+          ) : (
+            <ChevronRight size={20} className="text-gray-500" />
+          )}
+        </button>
 
-        {stockLogs.length === 0 ? (
-          <Card className="p-6 text-center text-gray-500">尚無異動記錄</Card>
-        ) : (
-          <Card className="divide-y divide-gray-200">
-            {stockLogs.map((log) => {
-              const variant = log.color_variant as any;
-              const isCancelled = log.reference?.includes("取消訂單");
-              const typeConfig = {
-                purchase: {
-                  icon: TrendingUp,
-                  color: isCancelled ? "text-gray-500" : "text-green-600",
-                  bg: isCancelled ? "bg-gray-100" : "bg-green-50",
-                  label: "進貨",
-                },
-                defect: {
-                  icon: AlertTriangle,
-                  color: "text-yellow-600",
-                  bg: "bg-yellow-50",
-                  label: "瑕疵",
-                },
-                sale: {
-                  icon: TrendingDown,
-                  color: isCancelled ? "text-gray-500" : "text-red-600",
-                  bg: isCancelled ? "bg-gray-100" : "bg-red-50",
-                  label: isCancelled ? "取消" : "銷售",
-                },
-              };
-              const config = typeConfig[log.type];
-              const Icon = config.icon;
+        {isLogSectionExpanded && (
+          <>
+            {stockLogs.length === 0 ? (
+              <Card className="p-6 text-center text-gray-500">尚無異動記錄</Card>
+            ) : (
+              <Card className="divide-y divide-gray-200">
+                {stockLogs.map((log) => {
+                  const variant = log.color_variant;
+                  const isCancelled = log.reference?.includes("取消訂單");
+                  const typeConfig = {
+                    purchase: {
+                      icon: TrendingUp,
+                      color: isCancelled ? "text-gray-500" : "text-green-600",
+                      bg: isCancelled ? "bg-gray-100" : "bg-green-50",
+                      label: "進貨",
+                    },
+                    defect: {
+                      icon: AlertTriangle,
+                      color: "text-yellow-600",
+                      bg: "bg-yellow-50",
+                      label: "瑕疵",
+                    },
+                    sale: {
+                      icon: TrendingDown,
+                      color: isCancelled ? "text-gray-500" : "text-red-600",
+                      bg: isCancelled ? "bg-gray-100" : "bg-red-50",
+                      label: isCancelled ? "取消" : "銷售",
+                    },
+                  };
+                  const config = typeConfig[log.type];
+                  const Icon = config.icon;
 
-              return (
-                <div key={log.id} className="p-4 flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${config.bg}`}>
-                    <Icon size={16} className={config.color} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      {variant?.color}
-                      {variant?.size && ` / ${variant.size}`} - {config.label}
-                    </p>
-                    {log.reference && (
-                      <p className="text-xs text-gray-500">{log.reference}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${config.color}`}>
-                      {log.type === "purchase" || isCancelled ? "+" : "-"}
-                      {log.quantity}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {format(new Date(log.created_at), "yyyy/MM/dd HH:mm", {
-                        locale: zhTW,
-                      })}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => deleteStockLog(log.id, log.type, log.quantity, log.color_variant_id)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                  >
-                    <Trash2 size={14} className="text-red-500" />
-                  </button>
-                </div>
-              );
-            })}
-          </Card>
+                  return (
+                    <div key={log.id} className="p-4 flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${config.bg}`}>
+                        <Icon size={16} className={config.color} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {variant?.color}
+                          {variant?.size && ` / ${variant.size}`} - {config.label}
+                        </p>
+                        {log.reference && (
+                          <p className="text-xs text-gray-500">{log.reference}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${config.color}`}>
+                          {log.type === "purchase" || isCancelled ? "+" : "-"}
+                          {log.quantity}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {format(new Date(log.created_at), "yyyy/MM/dd HH:mm", {
+                            locale: zhTW,
+                          })}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteStockLog(log.id, log.type, log.quantity, log.color_variant_id)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={14} className="text-red-500" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </Card>
+            )}
+          </>
         )}
       </div>
 
@@ -790,6 +916,7 @@ export default function ProductDetailPage() {
         onClose={() => {
           setIsLogModalOpen(false);
           setSelectedVariant(null);
+          setExpandSaleDetails(false);
         }}
         title={`記錄庫存異動 - ${selectedVariant?.color}${selectedVariant?.size ? ` / ${selectedVariant.size}` : ""}`}
       >
@@ -808,7 +935,7 @@ export default function ProductDetailPage() {
                   key={type.value}
                   type="button"
                   onClick={() =>
-                    setLogForm({ ...logForm, type: type.value as any })
+                    setLogForm({ ...logForm, type: type.value as "purchase" | "defect" | "sale" })
                   }
                   className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${
                     logForm.type === type.value
@@ -841,30 +968,42 @@ export default function ProductDetailPage() {
           />
 
           {logForm.type === "sale" && (
-            <>
-              <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
-                <span className="text-sm text-gray-600">客戶編號</span>
-                <span className="font-mono font-bold text-gray-900">{nextClientCode}</span>
-              </div>
-              <Input
-                label="客戶名稱（選填，留白顯示編號）"
-                value={logForm.customer_name}
-                onChange={(e) => setLogForm({ ...logForm, customer_name: e.target.value })}
-                placeholder="留白將顯示客戶編號"
-              />
-              <Input
-                label="單價"
-                type="number"
-                step="0.01"
-                value={logForm.unit_price}
-                onChange={(e) => setLogForm({ ...logForm, unit_price: parseFloat(e.target.value) || 0 })}
-              />
-              {logForm.quantity > 0 && (
-                <div className="text-right text-sm text-gray-600">
-                  小計：<span className="font-bold text-orange-600">${logForm.quantity * logForm.unit_price}</span>
+            <div>
+              <button
+                type="button"
+                onClick={() => setExpandSaleDetails(!expandSaleDetails)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <span>詳細資訊（客戶、價格）</span>
+                {expandSaleDetails ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+              {expandSaleDetails && (
+                <div className="mt-3 space-y-4">
+                  <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
+                    <span className="text-sm text-gray-600">客戶編號</span>
+                    <span className="font-mono font-bold text-gray-900">{nextClientCode}</span>
+                  </div>
+                  <Input
+                    label="客戶名稱（選填，留白顯示編號）"
+                    value={logForm.customer_name}
+                    onChange={(e) => setLogForm({ ...logForm, customer_name: e.target.value })}
+                    placeholder="留白將顯示客戶編號"
+                  />
+                  <Input
+                    label="單價"
+                    type="number"
+                    step="0.01"
+                    value={logForm.unit_price}
+                    onChange={(e) => setLogForm({ ...logForm, unit_price: parseFloat(e.target.value) || 0 })}
+                  />
+                  {logForm.quantity > 0 && (
+                    <div className="text-right text-sm text-gray-600">
+                      小計：<span className="font-bold text-orange-600">${logForm.quantity * logForm.unit_price}</span>
+                    </div>
+                  )}
                 </div>
               )}
-            </>
+            </div>
           )}
 
           <Input
@@ -880,9 +1019,10 @@ export default function ProductDetailPage() {
               type="button"
               variant="secondary"
               onClick={() => {
-                setIsLogModalOpen(false);
-                setSelectedVariant(null);
-              }}
+                  setIsLogModalOpen(false);
+                  setSelectedVariant(null);
+                  setExpandSaleDetails(false);
+                }}
             >
               取消
             </Button>
