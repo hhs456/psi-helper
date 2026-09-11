@@ -5,6 +5,14 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.6.1] - 2026-09-11
+
+### 修復
+
+- **排序位置改變 BUG（再次修復）**：修復拖曳排序後記錄庫存異動時，`sort_order` 被覆寫為舊值導致排序位置改變的問題
+  - 更新庫存時不再寫入 `sort_order` 和 `is_pinned` 欄位，避免前端 state 中的舊值覆蓋 DB 中的新值
+  - 影響的函式：`addStockLog`、`deleteStockLog`、`handleCreateOrder`、`handleUpdateOrder`、`updateStatus`、`handleDelete`
+
 ## [0.6.0] - 2026-09-11
 
 ### 改進

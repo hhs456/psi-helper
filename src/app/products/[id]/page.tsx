@@ -346,10 +346,7 @@ export default function ProductDetailPage() {
       return;
     }
 
-    const updateData: Record<string, number | boolean> = {
-      sort_order: selectedVariant.sort_order,
-      is_pinned: selectedVariant.is_pinned,
-    };
+    const updateData: Record<string, number> = {};
     if (logForm.type === "purchase") {
       updateData.purchased = selectedVariant.purchased + logForm.quantity;
     } else if (logForm.type === "defect") {
@@ -428,10 +425,7 @@ export default function ProductDetailPage() {
 
     const variant = variants.find((v) => v.id === variantId);
     if (variant) {
-      const updateData: Record<string, number | boolean> = {
-        sort_order: variant.sort_order,
-        is_pinned: variant.is_pinned,
-      };
+      const updateData: Record<string, number> = {};
       if (logType === "purchase") {
         updateData.purchased = variant.purchased - quantity;
       } else if (logType === "defect") {
