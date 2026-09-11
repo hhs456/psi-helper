@@ -15,6 +15,7 @@ import {
   TrendingDown,
   AlertTriangle,
   Trash2,
+  Edit2,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -34,12 +35,15 @@ export default function ProductDetailPage() {
 
   const [isAddColorModalOpen, setIsAddColorModalOpen] = useState(false);
   const [isAddSizeModalOpen, setIsAddSizeModalOpen] = useState(false);
+  const [isEditVariantModalOpen, setIsEditVariantModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ColorVariant | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [editingVariant, setEditingVariant] = useState<ColorVariant | null>(null);
 
   const [colorForm, setColorForm] = useState({ color: "", size: "" });
   const [sizeForm, setSizeForm] = useState({ size: "", color: "" });
+  const [editForm, setEditForm] = useState({ color: "", size: "" });
   const [logForm, setLogForm] = useState({
     type: "purchase" as "purchase" | "defect" | "sale",
     quantity: 0,
@@ -311,6 +315,31 @@ export default function ProductDetailPage() {
     fetchData();
   }
 
+  async function editVariant(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingVariant) return;
+
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from("color_variants")
+      .update({
+        color: editForm.color,
+        size: editForm.size || null,
+      })
+      .eq("id", editingVariant.id);
+
+    if (error) {
+      alert("更新失敗：" + error.message);
+      return;
+    }
+
+    setEditingVariant(null);
+    setEditForm({ color: "", size: "" });
+    setIsEditVariantModalOpen(false);
+    fetchData();
+  }
+
   async function deleteVariant(variantId: string) {
     if (!confirm("確定要刪除此款式嗎？相關的庫存記錄也會一併刪除。")) return;
 
@@ -475,6 +504,19 @@ export default function ProductDetailPage() {
                                   >
                                     記錄
                                   </Button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingVariant(variant);
+                                      setEditForm({
+                                        color: variant.color,
+                                        size: variant.size || "",
+                                      });
+                                      setIsEditVariantModalOpen(true);
+                                    }}
+                                    className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                                  >
+                                    <Edit2 size={14} className="text-blue-500" />
+                                  </button>
                                   <button
                                     onClick={() => deleteVariant(variant.id)}
                                     className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
@@ -697,6 +739,46 @@ export default function ProductDetailPage() {
               取消
             </Button>
             <Button type="submit">新增</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Variant Modal */}
+      <Modal
+        isOpen={isEditVariantModalOpen}
+        onClose={() => {
+          setIsEditVariantModalOpen(false);
+          setEditingVariant(null);
+          setEditForm({ color: "", size: "" });
+        }}
+        title="編輯款式"
+      >
+        <form onSubmit={editVariant} className="space-y-4">
+          <Input
+            label="顏色"
+            value={editForm.color}
+            onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
+            required
+          />
+          <Input
+            label="尺寸"
+            value={editForm.size}
+            onChange={(e) => setEditForm({ ...editForm, size: e.target.value })}
+            placeholder="例如：S、M、L、均碼"
+          />
+          <div className="flex gap-2 justify-end pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsEditVariantModalOpen(false);
+                setEditingVariant(null);
+                setEditForm({ color: "", size: "" });
+              }}
+            >
+              取消
+            </Button>
+            <Button type="submit">更新</Button>
           </div>
         </form>
       </Modal>
