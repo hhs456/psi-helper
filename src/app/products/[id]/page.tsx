@@ -588,11 +588,12 @@ export default function ProductDetailPage() {
           <Card className="divide-y divide-gray-200">
             {stockLogs.map((log) => {
               const variant = log.color_variant as any;
+              const isCancelled = log.reference?.includes("取消訂單");
               const typeConfig = {
                 purchase: {
                   icon: TrendingUp,
-                  color: "text-green-600",
-                  bg: "bg-green-50",
+                  color: isCancelled ? "text-gray-500" : "text-green-600",
+                  bg: isCancelled ? "bg-gray-100" : "bg-green-50",
                   label: "進貨",
                 },
                 defect: {
@@ -603,9 +604,9 @@ export default function ProductDetailPage() {
                 },
                 sale: {
                   icon: TrendingDown,
-                  color: "text-red-600",
-                  bg: "bg-red-50",
-                  label: "銷售",
+                  color: isCancelled ? "text-gray-500" : "text-red-600",
+                  bg: isCancelled ? "bg-gray-100" : "bg-red-50",
+                  label: isCancelled ? "取消" : "銷售",
                 },
               };
               const config = typeConfig[log.type];
@@ -627,7 +628,7 @@ export default function ProductDetailPage() {
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-bold ${config.color}`}>
-                      {log.type === "purchase" ? "+" : "-"}
+                      {log.type === "purchase" || isCancelled ? "+" : "-"}
                       {log.quantity}
                     </p>
                     <p className="text-xs text-gray-500">
