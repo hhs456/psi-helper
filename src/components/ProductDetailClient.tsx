@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -149,8 +149,10 @@ function SortableVariantCard({
   );
 }
 
-export function ProductDetailClient({ productId }: { productId: string }) {
+export function ProductDetailClient() {
   const router = useRouter();
+  const params = useParams();
+  const productId = params.id as string;
   const { product, variants: fetchedVariants, nextClientCode: initialNextClientCode, isLoading, isValidating, error } = useProductDetail(productId);
 
   const [variants, setVariants] = useState<ColorVariant[]>(fetchedVariants);

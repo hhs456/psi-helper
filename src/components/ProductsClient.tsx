@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { compressImage } from "@/lib/image";
 import { Card } from "@/components/ui/Card";
@@ -141,7 +142,9 @@ function SortableProductCard({
   );
 }
 
-export function ProductsClient({ currentPage, pageSize }: { currentPage: number; pageSize: number }) {
+export function ProductsClient({ pageSize }: { pageSize: number }) {
+  const searchParams = useSearchParams();
+  const currentPage = parseInt(searchParams.get("page") || "1");
   const { products, suppliers, totalPages, isLoading, error, mutate } = useProducts(currentPage, pageSize);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithSupplier | null>(null);
