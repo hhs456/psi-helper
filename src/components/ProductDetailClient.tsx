@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
@@ -21,6 +21,7 @@ import {
   Pin,
   PinOff,
   GripVertical,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -41,7 +42,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Product, ColorVariant, StockLog } from "@/types";
+import { useProductDetail } from "@/lib/hooks";
+import type { ColorVariant, StockLog } from "@/types";
 
 function SortableVariantCard({
   variant,
@@ -147,19 +149,11 @@ function SortableVariantCard({
   );
 }
 
-export function ProductDetailClient({
-  initialProduct,
-  initialVariants,
-  initialNextClientCode,
-}: {
-  initialProduct: Product;
-  initialVariants: ColorVariant[];
-  initialNextClientCode: string;
-}) {
+export function ProductDetailClient({ productId }: { productId: string }) {
   const router = useRouter();
+  const { product, variants: fetchedVariants, nextClientCode: initialNextClientCode, isLoading, error } = useProductDetail(productId);
 
-  const [product] = useState(initialProduct);
-  const [variants, setVariants] = useState(initialVariants);
+  const [variants, setVariants] = useState<ColorVariant[]>(fetchedVariants);
   const [stockLogs, setStockLogs] = useState<StockLog[]>([]);
   const [stockLogsLoading, setStockLogsLoading] = useState(false);
 
@@ -185,6 +179,17 @@ export function ProductDetailClient({
   const [expandedSizes, setExpandedSizes] = useState<Set<string>>(new Set());
   const [expandSaleDetails, setExpandSaleDetails] = useState(false);
   const [isLogSectionExpanded, setIsLogSectionExpanded] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const variantsBySize = useMemo(() => {
     return variants.reduce<Record<string, ColorVariant[]>>((acc, v) => {
@@ -216,12 +221,6 @@ export function ProductDetailClient({
       ),
     };
   }, [variants]);
-
-  useEffect(() => {
-    if (isLogSectionExpanded && stockLogs.length === 0) {
-      fetchStockLogs();
-    }
-  }, [isLogSectionExpanded]);
 
   async function fetchStockLogs() {
     const variantIds = variants.map((v) => v.id);
@@ -256,6 +255,31 @@ export function ProductDetailClient({
     }
   }
 
+  function handleToggleLogSection() {
+    const newState = !isLogSectionExpanded;
+    setIsLogSectionExpanded(newState);
+    if (newState && stockLogs.length === 0) {
+      fetchStockLogs();
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-gray-400" size={32} />
+      </div>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+        <Package size={48} className="mb-4" />
+        <p>找不到商品</p>
+      </div>
+    );
+  }
+
   function toggleSize(size: string) {
     setExpandedSizes((prev) => {
       const next = new Set(prev);
@@ -270,6 +294,7 @@ export function ProductDetailClient({
 
   async function addColor(e: React.FormEvent) {
     e.preventDefault();
+    if (!product) return;
     const supabase = createClient();
 
     const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
@@ -303,6 +328,7 @@ export function ProductDetailClient({
 
   async function addSize(e: React.FormEvent) {
     e.preventDefault();
+    if (!product) return;
     const supabase = createClient();
 
     const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
@@ -555,17 +581,6 @@ export function ProductDetailClient({
     );
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
 
@@ -616,15 +631,6 @@ export function ProductDetailClient({
     if (error) {
       console.error("排序更新失敗:", error);
     }
-  }
-
-  if (!product) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-        <Package size={48} className="mb-4" />
-        <p>找不到商品</p>
-      </div>
-    );
   }
 
   return (
@@ -793,7 +799,7 @@ export function ProductDetailClient({
       <div>
         <button
           type="button"
-          onClick={() => setIsLogSectionExpanded(!isLogSectionExpanded)}
+          onClick={handleToggleLogSection}
           className="w-full flex items-center justify-between mb-4"
         >
           <h2 className="text-lg font-semibold text-gray-900">異動記錄</h2>

@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/browser";
-import type { Product, Supplier, InventorySummary } from "@/types";
+import type { Product, Supplier, InventorySummary, ColorVariant } from "@/types";
 
 type ProductWithSupplier = Omit<Product, "supplier"> & {
   supplier: Supplier | null;
@@ -98,6 +98,60 @@ export function useSuppliers() {
 
   return {
     suppliers: data || [],
+    isLoading,
+    error,
+    mutate,
+  };
+}
+
+export function useProductDetail(productId: string) {
+  const fetcher = async () => {
+    const supabase = createClient();
+
+    const [productRes, variantsRes, ordersRes] = await Promise.all([
+      supabase.from("products").select("*").eq("id", productId).single(),
+      supabase
+        .from("color_variants")
+        .select("*")
+        .eq("product_id", productId)
+        .order("is_pinned", { ascending: false })
+        .order("sort_order", { ascending: false })
+        .order("created_at", { ascending: true }),
+      supabase.from("sales_orders").select("client_code"),
+    ]);
+
+    if (productRes.error || !productRes.data) {
+      throw new Error("Product not found");
+    }
+
+    const maxCode = (ordersRes.data || [])
+      .map((o) => {
+        const match = o.client_code?.match(/^C(\d+)$/);
+        return match ? parseInt(match[1]) : 0;
+      })
+      .reduce((max, curr) => Math.max(max, curr), 0);
+
+    return {
+      product: productRes.data as Product,
+      variants: (variantsRes.data || []) as ColorVariant[],
+      nextClientCode: `C${String(maxCode + 1).padStart(3, "0")}`,
+    };
+  };
+
+  const { data, error, isLoading, mutate } = useSWR(
+    productId ? ["product-detail", productId] : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateIfStale: false,
+      dedupingInterval: 60000,
+    }
+  );
+
+  return {
+    product: data?.product || null,
+    variants: data?.variants || [],
+    nextClientCode: data?.nextClientCode || "C001",
     isLoading,
     error,
     mutate,
