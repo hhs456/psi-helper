@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { HomeClient } from "@/components/HomeClient";
+import { cacheLife } from "next/cache";
 import type { InventorySummary } from "@/types";
 
 export default async function Home() {
+  "use cache: private";
+  cacheLife("minutes");
+
   const supabase = await createClient();
 
   const { data, error } = await supabase

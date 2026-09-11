@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
+import { cacheLife } from "next/cache";
 import { TrendingUp, Package, ShoppingCart, DollarSign } from "lucide-react";
 
 export default async function ReportsPage() {
+  "use cache: private";
+  cacheLife("minutes");
+
   const supabase = await createClient();
 
   const [productsRes, variantsRes, salesRes] = await Promise.all([

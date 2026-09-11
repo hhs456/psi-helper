@@ -1,10 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { SalesClient } from "@/components/SalesClient";
+import { cacheLife } from "next/cache";
 import type { SalesOrder, Product, ColorVariant } from "@/types";
 
 type VariantWithProduct = ColorVariant & { product_name: string };
 
 export default async function SalesPage() {
+  "use cache: private";
+  cacheLife("minutes");
+
   const supabase = await createClient();
 
   const [ordersRes, productsRes, variantsRes] = await Promise.all([

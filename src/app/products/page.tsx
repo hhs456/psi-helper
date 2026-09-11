@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProductsClient } from "@/components/ProductsClient";
+import { cacheLife } from "next/cache";
 import type { Product, Supplier } from "@/types";
 
 type ProductWithSupplier = Omit<Product, "supplier"> & {
@@ -7,6 +8,9 @@ type ProductWithSupplier = Omit<Product, "supplier"> & {
 };
 
 export default async function ProductsPage() {
+  "use cache: private";
+  cacheLife("minutes");
+
   const supabase = await createClient();
 
   const [productsRes, suppliersRes] = await Promise.all([

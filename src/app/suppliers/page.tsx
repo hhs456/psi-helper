@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { SuppliersClient } from "@/components/SuppliersClient";
+import { cacheLife } from "next/cache";
 import type { Supplier } from "@/types";
 
 export default async function SuppliersPage() {
+  "use cache: private";
+  cacheLife("minutes");
+
   const supabase = await createClient();
 
   const { data, error } = await supabase
