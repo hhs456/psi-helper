@@ -285,11 +285,7 @@ export default function ProductsPage() {
     if (editingProduct) {
       const { error } = await supabase
         .from("products")
-        .update({
-          ...productData,
-          sort_order: editingProduct.sort_order,
-          is_pinned: editingProduct.is_pinned,
-        })
+        .update(productData)
         .eq("id", editingProduct.id);
 
       if (error) {
@@ -325,14 +321,20 @@ export default function ProductsPage() {
 
   async function handlePin(id: string, currentIsPinned: boolean) {
     const supabase = createClient();
-    const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
-    
+
+    const updateData: Record<string, boolean | number> = {
+      is_pinned: !currentIsPinned,
+    };
+    if (!currentIsPinned) {
+      // 釘選時移到最上方
+      const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
+      updateData.sort_order = maxOrder + 1;
+    }
+    // 取消釘選時保留原本的 sort_order 不變
+
     const { error } = await supabase
       .from("products")
-      .update({
-        is_pinned: !currentIsPinned,
-        sort_order: !currentIsPinned ? maxOrder + 1 : 0,
-      })
+      .update(updateData)
       .eq("id", id);
 
     if (error) {
