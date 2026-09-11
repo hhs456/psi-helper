@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Warehouse } from "lucide-react";
+import { Plus, Edit2, Trash2, Warehouse, Eye } from "lucide-react";
 import type { Supplier } from "@/types";
 
 export default function SuppliersPage() {
@@ -138,6 +139,12 @@ export default function SuppliersPage() {
                   )}
                 </div>
                 <div className="flex gap-1">
+                  <Link
+                    href={`/suppliers/${supplier.id}`}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <Eye size={16} className="text-blue-600" />
+                  </Link>
                   <button
                     onClick={() => openModal(supplier)}
                     className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"

@@ -35,7 +35,16 @@ export default function ProductsPage() {
       const supabase = createClient();
 
       const [productsRes, suppliersRes] = await Promise.all([
-        supabase.from("products").select("*").order("created_at", { ascending: false }),
+        supabase
+          .from("products")
+          .select(`
+            *,
+            supplier:supplier_id (
+              id,
+              name
+            )
+          `)
+          .order("created_at", { ascending: false }),
         supabase.from("suppliers").select("*").order("name"),
       ]);
 
@@ -227,6 +236,11 @@ export default function ProductsPage() {
                       </h3>
                       {product.code && (
                         <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
+                      )}
+                      {(product as any).supplier?.name && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {(product as any).supplier.name}
+                        </p>
                       )}
                     </div>
                     <div className="flex gap-1">
