@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { compressImage } from "@/lib/image";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, GripVertical, Search, Loader2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -27,6 +28,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useProducts } from "@/lib/hooks";
+import { Pagination } from "@/components/ui/Pagination";
 import type { Product, Supplier } from "@/types";
 
 type ProductWithSupplier = Omit<Product, "supplier"> & {
@@ -139,15 +142,10 @@ function SortableProductCard({
   );
 }
 
-export function ProductsClient({
-  initialProducts,
-  initialSuppliers,
-}: {
-  initialProducts: ProductWithSupplier[];
-  initialSuppliers: Supplier[];
-}) {
-  const [products, setProducts] = useState<ProductWithSupplier[]>(initialProducts);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+export function ProductsClient({ pageSize }: { pageSize: number }) {
+  const searchParams = useSearchParams();
+  const currentPage = parseInt(searchParams.get("page") || "1");
+  const { products, suppliers, totalPages, isLoading, error, mutate } = useProducts(currentPage, pageSize);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithSupplier | null>(null);
   const [formData, setFormData] = useState({
@@ -160,36 +158,27 @@ export function ProductsClient({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  async function fetchData() {
-    const supabase = createClient();
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-    const [productsRes, suppliersRes] = await Promise.all([
-      supabase
-        .from("products")
-        .select(`
-          *,
-          supplier:supplier_id (
-            id,
-            name
-          )
-        `)
-        .order("is_pinned", { ascending: false })
-        .order("sort_order", { ascending: false })
-        .order("created_at", { ascending: true }),
-      supabase.from("suppliers").select("*").order("name"),
-    ]);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-gray-400" size={32} />
+      </div>
+    );
+  }
 
-    if (productsRes.error) {
-      console.error("Error fetching products:", productsRes.error);
-      return;
-    }
-    if (suppliersRes.error) {
-      console.error("Error fetching suppliers:", suppliersRes.error);
-      return;
-    }
-
-    setProducts(productsRes.data || []);
-    setSuppliers(suppliersRes.data || []);
+  if (error) {
+    return <div className="text-red-500">載入失敗：{error.message}</div>;
   }
 
   function openModal(product?: ProductWithSupplier) {
@@ -305,7 +294,7 @@ export function ProductsClient({
     }
 
     closeModal();
-    await fetchData();
+    await mutate();
   }
 
   async function handleDelete(id: string) {
@@ -319,7 +308,7 @@ export function ProductsClient({
       return;
     }
 
-    await fetchData();
+    await mutate();
   }
 
   async function handlePin(id: string, currentIsPinned: boolean) {
@@ -343,19 +332,8 @@ export function ProductsClient({
       return;
     }
 
-    await fetchData();
+    await mutate();
   }
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -373,7 +351,6 @@ export function ProductsClient({
     const newIndex = products.findIndex((p) => p.id === over.id);
 
     const newProducts = arrayMove(products, oldIndex, newIndex);
-    setProducts(newProducts);
 
     const supabase = createClient();
     const pinnedGroup = newProducts.filter((p) => p.is_pinned);
@@ -391,6 +368,8 @@ export function ProductsClient({
 
     if (error) {
       console.error("排序更新失敗:", error);
+    } else {
+      await mutate();
     }
   }
 
@@ -549,6 +528,7 @@ export function ProductsClient({
           </div>
         </form>
       </Modal>
+      <Pagination currentPage={currentPage} totalPages={totalPages} basePath="/products" />
     </>
   );
 }
