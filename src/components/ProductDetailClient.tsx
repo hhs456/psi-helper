@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
@@ -153,9 +153,16 @@ export function ProductDetailClient({ productId }: { productId: string }) {
   const router = useRouter();
   const { product, variants: fetchedVariants, nextClientCode: initialNextClientCode, isLoading, error } = useProductDetail(productId);
 
-  const [variants, setVariants] = useState<ColorVariant[]>(fetchedVariants);
+  const [variants, setVariants] = useState<ColorVariant[]>([]);
   const [stockLogs, setStockLogs] = useState<StockLog[]>([]);
   const [stockLogsLoading, setStockLogsLoading] = useState(false);
+
+  // Sync local state with SWR data when it loads
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setVariants(fetchedVariants);
+  }, [fetchedVariants]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const [isAddColorModalOpen, setIsAddColorModalOpen] = useState(false);
   const [isAddSizeModalOpen, setIsAddSizeModalOpen] = useState(false);
