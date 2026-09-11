@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
 import { compressImage } from "@/lib/image";
@@ -9,11 +9,138 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Plus, Edit2, Trash2, Package, X, ExternalLink, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Product, Supplier } from "@/types";
 
 type ProductWithSupplier = Omit<Product, "supplier"> & {
   supplier: Supplier | null;
 };
+
+function SortableProductCard({
+  product,
+  onPin,
+  onEdit,
+  onDelete,
+}: {
+  product: ProductWithSupplier;
+  onPin: (id: string, isPinned: boolean) => void;
+  onEdit: (product: ProductWithSupplier) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: product.id,
+    data: { isPinned: product.is_pinned },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={`overflow-hidden ${product.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+    >
+      <div className="flex">
+        <div
+          className="w-8 flex-shrink-0 flex items-center justify-center bg-gray-50 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 hover:bg-gray-100 touch-none"
+          title="拖曳排序"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={16} />
+        </div>
+        <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <Package className="text-gray-400" size={24} />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 p-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-sm">
+                {product.name}
+              </h3>
+              {product.code && (
+                <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
+              )}
+              {product.supplier?.name && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {product.supplier.name}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => onPin(product.id, product.is_pinned)}
+                className="p-1 rounded hover:bg-gray-100"
+                title={product.is_pinned ? "取消釘選" : "釘選"}
+              >
+                {product.is_pinned ? (
+                  <PinOff size={14} className="text-orange-500" />
+                ) : (
+                  <Pin size={14} className="text-gray-400" />
+                )}
+              </button>
+              <Link
+                href={`/products/${product.id}`}
+                className="p-1 rounded hover:bg-gray-100"
+              >
+                <ExternalLink size={14} className="text-blue-600" />
+              </Link>
+              <button
+                onClick={() => onEdit(product)}
+                className="p-1 rounded hover:bg-gray-100"
+              >
+                <Edit2 size={14} className="text-gray-600" />
+              </button>
+              <button
+                onClick={() => onDelete(product.id)}
+                className="p-1 rounded hover:bg-red-50"
+              >
+                <Trash2 size={14} className="text-red-500" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<ProductWithSupplier[]>([]);
@@ -30,9 +157,6 @@ export default function ProductsPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const dragNodeRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -219,48 +343,34 @@ export default function ProductsPage() {
     fetchData();
   }
 
-  function handleDragStart(e: React.DragEvent, index: number) {
-    dragNodeRef.current = e.currentTarget as HTMLElement;
-    setDragIndex(index);
-    e.dataTransfer.effectAllowed = "move";
-  }
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  function handleDragOver(e: React.DragEvent, index: number) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (dragNodeRef.current && dragNodeRef.current !== e.currentTarget) {
-      setDragOverIndex(index);
-    }
-  }
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
 
-  function handleDragLeave() {
-    setDragOverIndex(null);
-  }
+    if (!over || active.id === over.id) return;
 
-  async function handleDrop(e: React.DragEvent, dropIndex: number) {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === dropIndex) {
-      setDragIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
+    const activeItem = products.find((p) => p.id === active.id);
+    const overItem = products.find((p) => p.id === over.id);
 
-    const draggedItem = products[dragIndex];
-    const targetItem = products[dropIndex];
+    if (!activeItem || !overItem) return;
 
-    if (draggedItem.is_pinned !== targetItem.is_pinned) {
-      setDragIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
+    if (activeItem.is_pinned !== overItem.is_pinned) return;
 
-    const newProducts = [...products];
-    newProducts.splice(dragIndex, 1);
-    newProducts.splice(dropIndex, 0, draggedItem);
+    const oldIndex = products.findIndex((p) => p.id === active.id);
+    const newIndex = products.findIndex((p) => p.id === over.id);
 
+    const newProducts = arrayMove(products, oldIndex, newIndex);
     setProducts(newProducts);
-    setDragIndex(null);
-    setDragOverIndex(null);
 
     const supabase = createClient();
     const pinnedGroup = newProducts.filter((p) => p.is_pinned);
@@ -277,12 +387,6 @@ export default function ProductsPage() {
         .update({ sort_order: update.sort_order })
         .eq("id", update.id);
     }
-  }
-
-  function handleDragEnd() {
-    setDragIndex(null);
-    setDragOverIndex(null);
-    dragNodeRef.current = null;
   }
 
   const filteredProducts = products.filter((product) => {
@@ -333,98 +437,28 @@ export default function ProductsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProducts.map((product) => {
-            const actualIndex = products.findIndex((p) => p.id === product.id);
-            
-            return (
-              <Card
-                key={product.id}
-                className={`overflow-hidden transition-all ${
-                  product.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""
-                } ${dragOverIndex === actualIndex ? "ring-2 ring-blue-400 scale-[1.02]" : ""} ${
-                  dragIndex === actualIndex ? "opacity-50" : ""
-                }`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, actualIndex)}
-                onDragOver={(e) => handleDragOver(e, actualIndex)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, actualIndex)}
-                onDragEnd={handleDragEnd}
-              >
-                <div className="flex">
-                  <div
-                    className="w-8 flex-shrink-0 flex items-center justify-center bg-gray-50 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                    title="拖曳排序"
-                  >
-                    <GripVertical size={16} />
-                  </div>
-                  <div className="w-20 h-20 flex-shrink-0 bg-gray-100">
-                    {product.image_url ? (
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <Package className="text-gray-400" size={24} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 p-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-gray-900 text-sm">
-                          {product.name}
-                        </h3>
-                        {product.code && (
-                          <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
-                        )}
-                        {product.supplier?.name && (
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {product.supplier.name}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handlePin(product.id, product.is_pinned)}
-                          className="p-1 rounded hover:bg-gray-100"
-                          title={product.is_pinned ? "取消釘選" : "釘選"}
-                        >
-                          {product.is_pinned ? (
-                            <PinOff size={14} className="text-orange-500" />
-                          ) : (
-                            <Pin size={14} className="text-gray-400" />
-                          )}
-                        </button>
-                        <Link
-                          href={`/products/${product.id}`}
-                          className="p-1 rounded hover:bg-gray-100"
-                        >
-                          <ExternalLink size={14} className="text-blue-600" />
-                        </Link>
-                        <button
-                          onClick={() => openModal(product)}
-                          className="p-1 rounded hover:bg-gray-100"
-                        >
-                          <Edit2 size={14} className="text-gray-600" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product.id)}
-                          className="p-1 rounded hover:bg-red-50"
-                        >
-                          <Trash2 size={14} className="text-red-500" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredProducts.map((p) => p.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredProducts.map((product) => (
+                <SortableProductCard
+                  key={product.id}
+                  product={product}
+                  onPin={handlePin}
+                  onEdit={openModal}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <Modal

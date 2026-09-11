@@ -5,6 +5,15 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.6.0] - 2026-09-11
+
+### 改進
+
+- **拖曳排序支援觸控裝置**：改用 `@dnd-kit` 套件取代 HTML5 Drag and Drop API
+  - 支援手機和平板的觸控操作
+  - 拖曳錨點新增 `touch-none` class 避免與滾動衝突
+  - 更流暢的拖曳動畫和視覺回饋
+
 ## [0.5.1] - 2026-09-11
 
 ### 修復

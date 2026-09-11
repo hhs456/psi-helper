@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
@@ -24,7 +24,128 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Product, ColorVariant, StockLog } from "@/types";
+
+function SortableVariantCard({
+  variant,
+  onPin,
+  onLog,
+  onEdit,
+  onDelete,
+}: {
+  variant: ColorVariant;
+  onPin: (id: string, isPinned: boolean) => void;
+  onLog: (variant: ColorVariant) => void;
+  onEdit: (variant: ColorVariant) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: variant.id,
+    data: { isPinned: variant.is_pinned },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const available = variant.purchased - variant.defective - variant.sold;
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 ${variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div
+            className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-gray-400 hover:text-gray-600 touch-none"
+            title="拖曳排序"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={14} />
+          </div>
+          <h3 className="font-semibold text-gray-900">{variant.color}</h3>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => onPin(variant.id, variant.is_pinned)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            title={variant.is_pinned ? "取消釘選" : "釘選"}
+          >
+            {variant.is_pinned ? (
+              <PinOff size={14} className="text-orange-500" />
+            ) : (
+              <Pin size={14} className="text-gray-400" />
+            )}
+          </button>
+          <Button size="sm" variant="secondary" onClick={() => onLog(variant)}>
+            記錄
+          </Button>
+          <button
+            onClick={() => onEdit(variant)}
+            className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            <Edit2 size={14} className="text-blue-500" />
+          </button>
+          <button
+            onClick={() => onDelete(variant.id)}
+            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={14} className="text-red-500" />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2 text-center">
+        <div>
+          <p className="text-lg font-bold">{variant.purchased}</p>
+          <p className="text-xs text-gray-500">進貨</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold text-yellow-600">{variant.defective}</p>
+          <p className="text-xs text-gray-500">瑕疵</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold text-red-600">{variant.sold}</p>
+          <p className="text-xs text-gray-500">已售</p>
+        </div>
+        <div>
+          <p className={`text-lg font-bold ${available > 0 ? "text-green-600" : "text-red-600"}`}>
+            {available}
+          </p>
+          <p className="text-xs text-gray-500">庫存</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -58,10 +179,6 @@ export default function ProductDetailPage() {
   const [expandedSizes, setExpandedSizes] = useState<Set<string>>(new Set());
   const [expandSaleDetails, setExpandSaleDetails] = useState(false);
   const [isLogSectionExpanded, setIsLogSectionExpanded] = useState(false);
-  const [dragVariantId, setDragVariantId] = useState<string | null>(null);
-  const [dragOverVariantId, setDragOverVariantId] = useState<string | null>(null);
-  const [dragSize, setDragSize] = useState<string | null>(null);
-  const dragNodeRef = useRef<HTMLElement | null>(null);
 
   function toggleSize(size: string) {
     setExpandedSizes((prev) => {
@@ -396,69 +513,46 @@ export default function ProductDetailPage() {
     fetchData();
   }
 
-  function handleVariantDragStart(e: React.DragEvent, variantId: string, size: string) {
-    dragNodeRef.current = e.currentTarget as HTMLElement;
-    setDragVariantId(variantId);
-    setDragSize(size);
-    e.dataTransfer.effectAllowed = "move";
-  }
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  function handleVariantDragOver(e: React.DragEvent, variantId: string) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (dragNodeRef.current && dragNodeRef.current !== e.currentTarget) {
-      setDragOverVariantId(variantId);
-    }
-  }
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
 
-  function handleVariantDragLeave() {
-    setDragOverVariantId(null);
-  }
+    if (!over || active.id === over.id) return;
 
-  async function handleVariantDrop(e: React.DragEvent, dropVariantId: string, dropSize: string) {
-    e.preventDefault();
-    if (!dragVariantId || dragVariantId === dropVariantId) {
-      setDragVariantId(null);
-      setDragOverVariantId(null);
-      setDragSize(null);
-      return;
-    }
+    const activeVariant = variants.find((v) => v.id === active.id);
+    const overVariant = variants.find((v) => v.id === over.id);
 
-    if (dragSize !== dropSize) {
-      setDragVariantId(null);
-      setDragOverVariantId(null);
-      setDragSize(null);
-      return;
-    }
+    if (!activeVariant || !overVariant) return;
 
-    const draggedVariant = variants.find((v) => v.id === dragVariantId);
-    const targetVariant = variants.find((v) => v.id === dropVariantId);
+    const activeSize = activeVariant.size || "均碼";
+    const overSize = overVariant.size || "均碼";
 
-    if (!draggedVariant || !targetVariant || draggedVariant.is_pinned !== targetVariant.is_pinned) {
-      setDragVariantId(null);
-      setDragOverVariantId(null);
-      setDragSize(null);
-      return;
-    }
+    if (activeSize !== overSize) return;
+    if (activeVariant.is_pinned !== overVariant.is_pinned) return;
 
-    const sizeVariants = variants.filter((v) => (v.size || "均碼") === dropSize);
-    const draggedIndex = sizeVariants.findIndex((v) => v.id === dragVariantId);
-    const dropIndex = sizeVariants.findIndex((v) => v.id === dropVariantId);
+    const sizeVariants = variants.filter((v) => (v.size || "均碼") === activeSize);
+    const oldIndex = sizeVariants.findIndex((v) => v.id === active.id);
+    const newIndex = sizeVariants.findIndex((v) => v.id === over.id);
 
-    const newSizeVariants = [...sizeVariants];
-    newSizeVariants.splice(draggedIndex, 1);
-    newSizeVariants.splice(dropIndex, 0, draggedVariant);
+    const newSizeVariants = arrayMove(sizeVariants, oldIndex, newIndex);
 
     const newVariants = variants.map((v) => {
-      if ((v.size || "均碼") !== dropSize) return v;
+      if ((v.size || "均碼") !== activeSize) return v;
       const updated = newSizeVariants.find((nv) => nv.id === v.id);
       return updated || v;
     });
 
     setVariants(newVariants);
-    setDragVariantId(null);
-    setDragOverVariantId(null);
-    setDragSize(null);
 
     const supabase = createClient();
     const pinnedGroup = newSizeVariants.filter((v) => v.is_pinned);
@@ -475,13 +569,6 @@ export default function ProductDetailPage() {
         .update({ sort_order: update.sort_order })
         .eq("id", update.id);
     }
-  }
-
-  function handleVariantDragEnd() {
-    setDragVariantId(null);
-    setDragOverVariantId(null);
-    setDragSize(null);
-    dragNodeRef.current = null;
   }
 
   if (loading) {
@@ -580,161 +667,88 @@ export default function ProductDetailPage() {
             尚無款式資料
           </Card>
         ) : (
-          <div className="space-y-4">
-            {sizeOrder.map((size) => {
-              const isExpanded = expandedSizes.has(size);
-              const sizeVariants = variantsBySize[size];
-              return (
-                <div key={size} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleSize(size)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      {isExpanded ? (
-                        <ChevronDown size={18} className="text-gray-500" />
-                      ) : (
-                        <ChevronRight size={18} className="text-gray-500" />
-                      )}
-                      <span className="font-semibold text-gray-900">尺寸：{size}</span>
-                      <span className="text-sm text-gray-500">({sizeVariants.length} 色)</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-600">
-                        庫存：
-                        <span className="font-bold text-green-600">
-                          {sizeVariants.reduce((sum, v) => sum + (v.purchased - v.defective - v.sold), 0)}
-                        </span>
-                      </span>
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="p-3">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
-                        {sizeVariants.map((variant) => {
-                          const available = variant.purchased - variant.defective - variant.sold;
-                          
-                          return (
-                            <Card
-                              key={variant.id}
-                              className={`p-4 transition-all ${
-                                variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""
-                              } ${dragOverVariantId === variant.id ? "ring-2 ring-blue-400 scale-[1.02]" : ""} ${
-                                dragVariantId === variant.id ? "opacity-50" : ""
-                              }`}
-                              draggable
-                              onDragStart={(e) => handleVariantDragStart(e, variant.id, size)}
-                              onDragOver={(e) => handleVariantDragOver(e, variant.id)}
-                              onDragLeave={handleVariantDragLeave}
-                              onDrop={(e) => handleVariantDrop(e, variant.id, size)}
-                              onDragEnd={handleVariantDragEnd}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <div
-                                    className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-gray-400 hover:text-gray-600"
-                                    title="拖曳排序"
-                                  >
-                                    <GripVertical size={14} />
-                                  </div>
-                                  <h3 className="font-semibold text-gray-900">
-                                    {variant.color}
-                                  </h3>
-                                </div>
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={() => handlePinVariant(variant.id, variant.is_pinned)}
-                                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                                    title={variant.is_pinned ? "取消釘選" : "釘選"}
-                                  >
-                                    {variant.is_pinned ? (
-                                      <PinOff size={14} className="text-orange-500" />
-                                    ) : (
-                                      <Pin size={14} className="text-gray-400" />
-                                    )}
-                                  </button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => {
-                                      setSelectedVariant(variant);
-                                      setIsLogModalOpen(true);
-                                    }}
-                                  >
-                                    記錄
-                                  </Button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingVariant(variant);
-                                      setEditForm({
-                                        color: variant.color,
-                                        size: variant.size || "",
-                                      });
-                                      setIsEditVariantModalOpen(true);
-                                    }}
-                                    className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                                  >
-                                    <Edit2 size={14} className="text-blue-500" />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteVariant(variant.id)}
-                                    className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                  >
-                                    <Trash2 size={14} className="text-red-500" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-4 gap-2 text-center">
-                                <div>
-                                  <p className="text-lg font-bold">{variant.purchased}</p>
-                                  <p className="text-xs text-gray-500">進貨</p>
-                                </div>
-                                <div>
-                                  <p className="text-lg font-bold text-yellow-600">
-                                    {variant.defective}
-                                  </p>
-                                  <p className="text-xs text-gray-500">瑕疵</p>
-                                </div>
-                                <div>
-                                  <p className="text-lg font-bold text-red-600">
-                                    {variant.sold}
-                                  </p>
-                                  <p className="text-xs text-gray-500">已售</p>
-                                </div>
-                                <div>
-                                  <p
-                                    className={`text-lg font-bold ${
-                                      available > 0 ? "text-green-600" : "text-red-600"
-                                    }`}
-                                  >
-                                    {available}
-                                  </p>
-                                  <p className="text-xs text-gray-500">庫存</p>
-                                </div>
-                              </div>
-                            </Card>
-                          );
-                        })}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="space-y-4">
+              {sizeOrder.map((size) => {
+                const isExpanded = expandedSizes.has(size);
+                const sizeVariants = variantsBySize[size];
+                return (
+                  <div key={size} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleSize(size)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown size={18} className="text-gray-500" />
+                        ) : (
+                          <ChevronRight size={18} className="text-gray-500" />
+                        )}
+                        <span className="font-semibold text-gray-900">尺寸：{size}</span>
+                        <span className="text-sm text-gray-500">({sizeVariants.length} 色)</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedSize(size);
-                          setColorForm({ color: "", size: size === "均碼" ? "" : size });
-                          setIsAddColorModalOpen(true);
-                        }}
-                        className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 transition-colors"
-                      >
-                        <Plus size={14} className="inline mr-1" />
-                        新增顏色
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-gray-600">
+                          庫存：
+                          <span className="font-bold text-green-600">
+                            {sizeVariants.reduce((sum, v) => sum + (v.purchased - v.defective - v.sold), 0)}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+                    {isExpanded && (
+                      <div className="p-3">
+                        <SortableContext
+                          items={sizeVariants.map((v) => v.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                            {sizeVariants.map((variant) => (
+                              <SortableVariantCard
+                                key={variant.id}
+                                variant={variant}
+                                onPin={handlePinVariant}
+                                onLog={(v) => {
+                                  setSelectedVariant(v);
+                                  setIsLogModalOpen(true);
+                                }}
+                                onEdit={(v) => {
+                                  setEditingVariant(v);
+                                  setEditForm({
+                                    color: v.color,
+                                    size: v.size || "",
+                                  });
+                                  setIsEditVariantModalOpen(true);
+                                }}
+                                onDelete={deleteVariant}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSize(size);
+                            setColorForm({ color: "", size: size === "均碼" ? "" : size });
+                            setIsAddColorModalOpen(true);
+                          }}
+                          className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 transition-colors"
+                        >
+                          <Plus size={14} className="inline mr-1" />
+                          新增顏色
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </DndContext>
         )}
       </div>
 

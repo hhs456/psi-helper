@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
@@ -8,7 +8,115 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Plus, Edit2, Trash2, Warehouse, ExternalLink, Pin, PinOff, GripVertical, Search } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Supplier } from "@/types";
+
+function SortableSupplierCard({
+  supplier,
+  onPin,
+  onEdit,
+  onDelete,
+}: {
+  supplier: Supplier;
+  onPin: (id: string, isPinned: boolean) => void;
+  onEdit: (supplier: Supplier) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: supplier.id,
+    data: { isPinned: supplier.is_pinned },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 ${supplier.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-2 flex-1">
+          <div
+            className="cursor-grab active:cursor-grabbing p-1 -ml-1 mt-0.5 text-gray-400 hover:text-gray-600 touch-none"
+            title="拖曳排序"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={16} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
+            {supplier.contact && (
+              <p className="text-sm text-gray-500 mt-1">{supplier.contact}</p>
+            )}
+            {supplier.notes && (
+              <p className="text-sm text-gray-500 mt-1">{supplier.notes}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => onPin(supplier.id, supplier.is_pinned)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            title={supplier.is_pinned ? "取消釘選" : "釘選"}
+          >
+            {supplier.is_pinned ? (
+              <PinOff size={16} className="text-orange-500" />
+            ) : (
+              <Pin size={16} className="text-gray-400" />
+            )}
+          </button>
+          <Link
+            href={`/suppliers/${supplier.id}`}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <ExternalLink size={16} className="text-blue-600" />
+          </Link>
+          <button
+            onClick={() => onEdit(supplier)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Edit2 size={16} className="text-gray-600" />
+          </button>
+          <button
+            onClick={() => onDelete(supplier.id)}
+            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={16} className="text-red-500" />
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -17,9 +125,6 @@ export default function SuppliersPage() {
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
   const [searchQuery, setSearchQuery] = useState("");
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const dragNodeRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     fetchSuppliers();
@@ -129,48 +234,34 @@ export default function SuppliersPage() {
     fetchSuppliers();
   }
 
-  function handleDragStart(e: React.DragEvent, index: number) {
-    dragNodeRef.current = e.currentTarget as HTMLElement;
-    setDragIndex(index);
-    e.dataTransfer.effectAllowed = "move";
-  }
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  function handleDragOver(e: React.DragEvent, index: number) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (dragNodeRef.current && dragNodeRef.current !== e.currentTarget) {
-      setDragOverIndex(index);
-    }
-  }
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
 
-  function handleDragLeave() {
-    setDragOverIndex(null);
-  }
+    if (!over || active.id === over.id) return;
 
-  async function handleDrop(e: React.DragEvent, dropIndex: number) {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === dropIndex) {
-      setDragIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
+    const activeItem = suppliers.find((s) => s.id === active.id);
+    const overItem = suppliers.find((s) => s.id === over.id);
 
-    const draggedItem = suppliers[dragIndex];
-    const targetItem = suppliers[dropIndex];
+    if (!activeItem || !overItem) return;
 
-    if (draggedItem.is_pinned !== targetItem.is_pinned) {
-      setDragIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
+    if (activeItem.is_pinned !== overItem.is_pinned) return;
 
-    const newSuppliers = [...suppliers];
-    newSuppliers.splice(dragIndex, 1);
-    newSuppliers.splice(dropIndex, 0, draggedItem);
+    const oldIndex = suppliers.findIndex((s) => s.id === active.id);
+    const newIndex = suppliers.findIndex((s) => s.id === over.id);
 
+    const newSuppliers = arrayMove(suppliers, oldIndex, newIndex);
     setSuppliers(newSuppliers);
-    setDragIndex(null);
-    setDragOverIndex(null);
 
     const supabase = createClient();
     const pinnedGroup = newSuppliers.filter((s) => s.is_pinned);
@@ -187,12 +278,6 @@ export default function SuppliersPage() {
         .update({ sort_order: update.sort_order })
         .eq("id", update.id);
     }
-  }
-
-  function handleDragEnd() {
-    setDragIndex(null);
-    setDragOverIndex(null);
-    dragNodeRef.current = null;
   }
 
   const filteredSuppliers = suppliers.filter((supplier) => {
@@ -240,79 +325,28 @@ export default function SuppliersPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredSuppliers.map((supplier) => {
-            const actualIndex = suppliers.findIndex((s) => s.id === supplier.id);
-            
-            return (
-              <Card
-                key={supplier.id}
-                className={`p-4 transition-all ${
-                  supplier.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""
-                } ${dragOverIndex === actualIndex ? "ring-2 ring-blue-400 scale-[1.02]" : ""} ${
-                  dragIndex === actualIndex ? "opacity-50" : ""
-                }`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, actualIndex)}
-                onDragOver={(e) => handleDragOver(e, actualIndex)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, actualIndex)}
-                onDragEnd={handleDragEnd}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-2 flex-1">
-                    <div
-                      className="cursor-grab active:cursor-grabbing p-1 -ml-1 mt-0.5 text-gray-400 hover:text-gray-600"
-                      title="拖曳排序"
-                    >
-                      <GripVertical size={16} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
-                      {supplier.contact && (
-                        <p className="text-sm text-gray-500 mt-1">{supplier.contact}</p>
-                      )}
-                      {supplier.notes && (
-                        <p className="text-sm text-gray-500 mt-1">{supplier.notes}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => handlePin(supplier.id, supplier.is_pinned)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                      title={supplier.is_pinned ? "取消釘選" : "釘選"}
-                    >
-                      {supplier.is_pinned ? (
-                        <PinOff size={16} className="text-orange-500" />
-                      ) : (
-                        <Pin size={16} className="text-gray-400" />
-                      )}
-                    </button>
-                    <Link
-                      href={`/suppliers/${supplier.id}`}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <ExternalLink size={16} className="text-blue-600" />
-                    </Link>
-                    <button
-                      onClick={() => openModal(supplier)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <Edit2 size={16} className="text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(supplier.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 size={16} className="text-red-500" />
-                    </button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredSuppliers.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredSuppliers.map((supplier) => (
+                <SortableSupplierCard
+                  key={supplier.id}
+                  supplier={supplier}
+                  onPin={handlePin}
+                  onEdit={openModal}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <Modal
