@@ -352,6 +352,9 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
 
     const newProducts = arrayMove(products, oldIndex, newIndex);
 
+    // Optimistic update: update UI immediately
+    mutate({ products: newProducts, suppliers, totalPages }, { revalidate: false });
+
     const supabase = createClient();
     const pinnedGroup = newProducts.filter((p) => p.is_pinned);
     const unpinnedGroup = newProducts.filter((p) => !p.is_pinned);
@@ -368,9 +371,10 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
 
     if (error) {
       console.error("排序更新失敗:", error);
-    } else {
-      await mutate();
     }
+
+    // Revalidate from server
+    await mutate();
   }
 
   const filteredProducts = products.filter((product) => {

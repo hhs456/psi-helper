@@ -252,6 +252,9 @@ export function SuppliersClient() {
 
     const newSuppliers = arrayMove(suppliers, oldIndex, newIndex);
 
+    // Optimistic update: update UI immediately
+    mutate(newSuppliers, { revalidate: false });
+
     const supabase = createClient();
     const pinnedGroup = newSuppliers.filter((s) => s.is_pinned);
     const unpinnedGroup = newSuppliers.filter((s) => !s.is_pinned);
@@ -268,9 +271,10 @@ export function SuppliersClient() {
 
     if (error) {
       console.error("排序更新失敗:", error);
-    } else {
-      await mutate();
     }
+
+    // Revalidate from server
+    await mutate();
   }
 
   const filteredSuppliers = suppliers.filter((supplier) => {
