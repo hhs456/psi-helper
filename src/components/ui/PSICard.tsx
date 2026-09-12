@@ -68,22 +68,24 @@ export function PSICard({ product }: { product: PSICardData }) {
 
       <div className="border-t border-gray-100">
         {product.variants.length > 0 ? (
-          <table className="w-full text-xs">
+          <table className="w-full text-xs table-fixed">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-2 py-1.5 text-left text-gray-500 font-medium">顏色/尺寸</th>
-                <th className="px-2 py-1.5 text-right text-gray-500 font-medium">進貨</th>
-                <th className="px-2 py-1.5 text-right text-gray-500 font-medium">瑕疵</th>
-                <th className="px-2 py-1.5 text-right text-gray-500 font-medium">銷售</th>
-                <th className="px-2 py-1.5 text-right text-gray-500 font-medium">庫存</th>
+                <th className="px-2 py-1.5 text-left text-gray-500 font-medium w-[35%] truncate">顏色/尺寸</th>
+                <th className="px-2 py-1.5 text-right text-gray-500 font-medium w-[16%]">進貨</th>
+                <th className="px-2 py-1.5 text-right text-gray-500 font-medium w-[16%]">瑕疵</th>
+                <th className="px-2 py-1.5 text-right text-gray-500 font-medium w-[16%]">銷售</th>
+                <th className="px-2 py-1.5 text-right text-gray-500 font-medium w-[17%]">庫存</th>
               </tr>
             </thead>
             <tbody>
               {product.variants.map((variant, idx) => (
                 <tr key={idx} className="border-t border-gray-50">
-                  <td className="px-2 py-1.5 text-gray-700">
-                    {variant.color}
-                    {variant.size && <span className="text-gray-400">/{variant.size}</span>}
+                  <td className="px-2 py-1.5 text-gray-700 truncate">
+                    <span className="block truncate">
+                      {variant.color}
+                      {variant.size && <span className="text-gray-400">/{variant.size}</span>}
+                    </span>
                   </td>
                   <td className="px-2 py-1.5 text-right">{variant.purchased}</td>
                   <td className="px-2 py-1.5 text-right text-yellow-600">{variant.defective}</td>
