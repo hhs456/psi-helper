@@ -26,6 +26,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Debug environment variables
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL exists: $([ -n \"$NEXT_PUBLIC_SUPABASE_URL\" ] && echo 'yes' || echo 'no')"
+          echo "SUPABASE_SERVICE_ROLE_KEY exists: $([ -n \"$SUPABASE_SERVICE_ROLE_KEY\" ] && echo 'yes' || echo 'no')"
+
       - name: Run backup
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
