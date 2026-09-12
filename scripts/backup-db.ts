@@ -1,23 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
-import { writeFileSync, mkdirSync, existsSync } from 'fs'
+import { writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
-
-if (existsSync('.env.local')) {
-  try {
-    const { config } = require('dotenv')
-    config({ path: '.env.local' })
-  } catch {
-    // dotenv not available, skip
-  }
-}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
-console.log('Debug env:')
-console.log('  NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'exists' : 'missing')
-console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'exists' : 'missing')
-console.log('  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:', process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? 'exists' : 'missing')
+console.log('Environment check:')
+console.log('  NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'set' : 'not set')
+console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'not set')
+console.log('  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:', process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? 'set' : 'not set')
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('錯誤: 缺少環境變數')
