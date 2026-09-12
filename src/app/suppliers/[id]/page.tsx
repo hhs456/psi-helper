@@ -1,23 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { useSWRConfig } from "swr";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { ProductCard } from "@/components/ui/ProductCard";
 import { useImageUpload } from "@/lib/useImageUpload";
+import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   ArrowLeft,
   Edit2,
   Trash2,
   Warehouse,
-  Package,
   Plus,
   X,
+  Search,
+  Pin,
+  PinOff,
+  Loader2,
 } from "lucide-react";
 import type { Supplier, Product } from "@/types";
 
@@ -41,6 +46,7 @@ export default function SupplierDetailPage() {
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
@@ -75,7 +81,9 @@ export default function SupplierDetailPage() {
             )
           `)
           .eq("supplier_id", supplierId)
-          .order("created_at", { ascending: false }),
+          .order("is_pinned", { ascending: false })
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true }),
       ]);
 
       if (supplierRes.error) throw supplierRes.error;
@@ -88,6 +96,53 @@ export default function SupplierDetailPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handlePin(productId: string, isPinned: boolean) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("products")
+      .update({ is_pinned: !isPinned })
+      .eq("id", productId);
+
+    if (error) {
+      alert("釘選失敗：" + error.message);
+      return;
+    }
+
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, is_pinned: !isPinned } : p))
+    );
+    globalMutate((key) => Array.isArray(key) && key[0] === "products");
+  }
+
+  async function handleSort(newProducts: ProductWithVariants[]) {
+    const supabase = createClient();
+    const updates = newProducts.map((p, index) => ({
+      id: p.id,
+      sort_order: newProducts.length - index,
+    }));
+
+    for (const update of updates) {
+      await supabase.from("products").update({ sort_order: update.sort_order }).eq("id", update.id);
+    }
+
+    setProducts(newProducts);
+    globalMutate((key) => Array.isArray(key) && key[0] === "products");
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = products.findIndex((p) => p.id === active.id);
+    const newIndex = products.findIndex((p) => p.id === over.id);
+
+    const newProducts = [...products];
+    const [movedProduct] = newProducts.splice(oldIndex, 1);
+    newProducts.splice(newIndex, 0, movedProduct);
+
+    await handleSort(newProducts);
   }
 
   function openEditModal() {
@@ -172,6 +227,8 @@ export default function SupplierDetailPage() {
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
+    const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
+
     const { error } = await supabase.from("products").insert([
       {
         name: productForm.name,
@@ -179,6 +236,7 @@ export default function SupplierDetailPage() {
         notes: productForm.notes || null,
         image_url: imageUrl,
         supplier_id: supplierId,
+        sort_order: maxOrder + 1,
       },
     ]);
 
@@ -253,6 +311,16 @@ export default function SupplierDetailPage() {
     fetchData();
   }
 
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery) return products;
+    const query = searchQuery.toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        (p.code && p.code.toLowerCase().includes(query))
+    );
+  }, [products, searchQuery]);
+
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => {
     const variants = p.variants || [];
@@ -268,7 +336,7 @@ export default function SupplierDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+        <Loader2 className="animate-spin text-gray-400" size={32} />
       </div>
     );
   }
@@ -333,69 +401,87 @@ export default function SupplierDetailPage() {
           </Button>
         </div>
 
+        {products.length > 0 && (
+          <div className="mb-4">
+            <div className="relative">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="搜尋商品名稱或編號..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        )}
+
         {products.length === 0 ? (
           <Card className="p-6 text-center text-gray-500">
             此供應商尚無商品
           </Card>
+        ) : filteredProducts.length === 0 ? (
+          <Card className="p-6 text-center text-gray-500">
+            找不到符合條件的商品
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {products.map((product) => {
-              const variants = product.variants || [];
-              const stock = variants.reduce(
-                (sum, v) => sum + (v.purchased - v.defective - v.sold),
-                0
-              );
-              return (
-                <Card key={product.id} className="overflow-hidden">
-                  <div className="flex">
-                    <Link href={`/products/${product.id}`} className="w-20 h-20 flex-shrink-0 bg-gray-100 block">
-                      {product.image_url ? (
-                        <img
-                          src={product.image_url}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <Package className="text-gray-400" size={24} />
-                        </div>
-                      )}
-                    </Link>
-                    <div className="flex-1 p-3">
-                      <Link href={`/products/${product.id}`}>
-                        <h3 className="font-semibold text-gray-900 text-sm hover:text-blue-600 transition-colors">
-                          {product.name}
-                        </h3>
-                      </Link>
-                      {product.code && (
-                        <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2 text-xs">
-                        <span className="text-gray-500">{variants.length} 款</span>
-                        <span className={stock > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                          庫存：{stock}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 pr-2 justify-center">
-                      <button
-                        onClick={() => openEditProductModal(product)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <Edit2 size={14} className="text-gray-600" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteProduct(product.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 size={14} className="text-red-500" />
-                      </button>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredProducts.map((p) => p.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredProducts.map((product) => {
+                  const variants = product.variants || [];
+                  return (
+                    <ProductCard
+                      key={product.id}
+                      product={{
+                        ...product,
+                        variants: variants.map((v) => ({
+                          color: v.color,
+                          size: v.size,
+                          available: v.purchased - v.defective - v.sold,
+                        })),
+                      }}
+                      isSortable
+                      showVariants
+                      actions={
+                        <>
+                          <button
+                            onClick={() => handlePin(product.id, product.is_pinned)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                            title={product.is_pinned ? "取消釘選" : "釘選"}
+                          >
+                            {product.is_pinned ? (
+                              <PinOff size={14} className="text-orange-500" />
+                            ) : (
+                              <Pin size={14} className="text-gray-400" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => openEditProductModal(product)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                          >
+                            <Edit2 size={14} className="text-gray-600" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(product.id)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 size={14} className="text-red-500" />
+                          </button>
+                        </>
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 

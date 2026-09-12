@@ -12,6 +12,16 @@ type ProductWithSupplier = Omit<Product, "supplier"> & {
   supplier: Supplier | null;
 };
 
+export type ProductWithSupplierAndVariants = ProductWithSupplier & {
+  variants: {
+    color: string;
+    size: string | null;
+    purchased: number;
+    defective: number;
+    sold: number;
+  }[];
+};
+
 export function useInventory() {
   const fetcher = async () => {
     const supabase = createClient();
@@ -78,18 +88,59 @@ export function useInventory() {
   };
 }
 
+export interface SupplierWithStats extends Supplier {
+  product_count: number;
+  total_stock: number;
+}
+
 export function useSuppliers() {
   const fetcher = async () => {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("suppliers")
-      .select("*")
+      .select(`
+        *,
+        products:products (
+          id,
+          variants:color_variants (
+            purchased,
+            defective,
+            sold
+          )
+        )
+      `)
       .order("is_pinned", { ascending: false })
       .order("sort_order", { ascending: false })
       .order("created_at", { ascending: true });
 
     if (error) throw error;
-    return (data || []) as Supplier[];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const suppliersWithStats: SupplierWithStats[] = (data || []).map((s: any) => {
+      const products = s.products || [];
+      const productCount = products.length;
+      let totalStock = 0;
+      for (const p of products) {
+        const variants = p.variants || [];
+        for (const v of variants) {
+          totalStock += v.purchased - v.defective - v.sold;
+        }
+      }
+      return {
+        id: s.id,
+        name: s.name,
+        contact: s.contact,
+        notes: s.notes,
+        sort_order: s.sort_order,
+        is_pinned: s.is_pinned,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+        product_count: productCount,
+        total_stock: totalStock,
+      };
+    });
+
+    return suppliersWithStats;
   };
 
   const { data, error, isLoading, mutate } = useSWR("suppliers", fetcher, swrOptions);
@@ -167,6 +218,13 @@ export function useProducts(page: number = 1, pageSize: number = 20) {
           supplier:supplier_id (
             id,
             name
+          ),
+          variants:color_variants (
+            color,
+            size,
+            purchased,
+            defective,
+            sold
           )
         `)
         .order("is_pinned", { ascending: false })
@@ -183,7 +241,7 @@ export function useProducts(page: number = 1, pageSize: number = 20) {
     const totalPages = Math.ceil(totalProducts / pageSize);
 
     return {
-      products: (productsRes.data || []) as ProductWithSupplier[],
+      products: (productsRes.data || []) as ProductWithSupplierAndVariants[],
       suppliers: (suppliersRes.data || []) as Supplier[],
       totalPages,
     };

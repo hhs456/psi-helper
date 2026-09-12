@@ -9,13 +9,13 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
-import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, Search, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, Search, Loader2, Package } from "lucide-react";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSuppliers } from "@/lib/hooks";
+import type { SupplierWithStats } from "@/lib/hooks";
 import { useSortableList } from "@/lib/useSortableList";
 import { usePin } from "@/lib/usePin";
-import type { Supplier } from "@/types";
 
 function SupplierCard({
   supplier,
@@ -23,9 +23,9 @@ function SupplierCard({
   onEdit,
   onDelete,
 }: {
-  supplier: Supplier;
+  supplier: SupplierWithStats;
   onPin: (id: string, isPinned: boolean) => void;
-  onEdit: (supplier: Supplier) => void;
+  onEdit: (supplier: SupplierWithStats) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -35,7 +35,7 @@ function SupplierCard({
           <div className="mt-0.5">
             <DragHandle className="-ml-1 p-1" />
           </div>
-          <div>
+          <div className="flex-1">
             <Link href={`/suppliers/${supplier.id}`}>
               <h3 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">{supplier.name}</h3>
             </Link>
@@ -45,6 +45,17 @@ function SupplierCard({
             {supplier.notes && (
               <p className="text-sm text-gray-500 mt-1">{supplier.notes}</p>
             )}
+            <div className="flex items-center gap-4 mt-2">
+              <div className="flex items-center gap-1 text-sm">
+                <Package size={14} className="text-gray-400" />
+                <span className="text-gray-600">{supplier.product_count} 商品</span>
+              </div>
+              <div className="text-sm">
+                <span className={supplier.total_stock > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                  庫存：{supplier.total_stock}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
         <div className="flex gap-1">
@@ -81,7 +92,7 @@ export function SuppliersClient() {
   const { suppliers, isLoading, error, mutate } = useSuppliers();
   const { mutate: globalMutate } = useSWRConfig();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<SupplierWithStats | null>(null);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -114,7 +125,7 @@ export function SuppliersClient() {
     return <div className="text-red-500">載入失敗：{error.message}</div>;
   }
 
-  function openModal(supplier?: Supplier) {
+  function openModal(supplier?: SupplierWithStats) {
     if (supplier) {
       setEditingSupplier(supplier);
       setFormData({
