@@ -10,12 +10,14 @@ import {
   X,
   Warehouse,
   LogOut,
+  BarChart3,
 } from "lucide-react";
 
 const navigation = [
   { name: "庫存總覽", href: "/", icon: LayoutDashboard },
   { name: "供應商", href: "/suppliers", icon: Warehouse },
   { name: "商品管理", href: "/products", icon: Package },
+  { name: "進銷明細", href: "/psi", icon: BarChart3 },
 ];
 
 export function Sidebar() {
