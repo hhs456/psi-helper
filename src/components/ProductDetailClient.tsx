@@ -23,6 +23,7 @@ import {
   Pin,
   PinOff,
   Loader2,
+  BookOpen,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -49,59 +50,63 @@ function VariantCard({
   const available = variant.purchased - variant.defective - variant.sold;
 
   return (
-    <SortableCard id={variant.id} isPinned={variant.is_pinned} className="p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <DragHandle className="-ml-1 p-1" iconSize={14} />
-          <h3 className="font-semibold text-gray-900">{variant.color}</h3>
+    <SortableCard id={variant.id} isPinned={variant.is_pinned} className="p-2">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1">
+          <DragHandle className="-ml-1 p-0.5" iconSize={12} />
+          <h3 className="font-medium text-sm text-gray-900">{variant.color}</h3>
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-0.5">
           <button
             onClick={() => onPin(variant.id, variant.is_pinned)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-1 rounded hover:bg-gray-100 transition-colors"
             title={variant.is_pinned ? "取消釘選" : "釘選"}
           >
             {variant.is_pinned ? (
-              <PinOff size={14} className="text-orange-500" />
+              <PinOff size={12} className="text-orange-500" />
             ) : (
-              <Pin size={14} className="text-gray-400" />
+              <Pin size={12} className="text-gray-400" />
             )}
           </button>
-          <Button size="sm" variant="secondary" onClick={() => onLog(variant)}>
-            記錄
-          </Button>
+          <button
+            onClick={() => onLog(variant)}
+            className="p-1 rounded hover:bg-green-50 transition-colors"
+            title="記錄庫存異動"
+          >
+            <BookOpen size={12} className="text-green-600" />
+          </button>
           <button
             onClick={() => onEdit(variant)}
-            className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+            className="p-1 rounded hover:bg-blue-50 transition-colors"
           >
-            <Edit2 size={14} className="text-blue-500" />
+            <Edit2 size={12} className="text-blue-500" />
           </button>
           <button
             onClick={() => onDelete(variant.id)}
-            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+            className="p-1 rounded hover:bg-red-50 transition-colors"
           >
-            <Trash2 size={14} className="text-red-500" />
+            <Trash2 size={12} className="text-red-500" />
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-2 text-center">
+      <div className="grid grid-cols-4 gap-1 text-center">
         <div>
-          <p className="text-lg font-bold">{variant.purchased}</p>
-          <p className="text-xs text-gray-500">進貨</p>
+          <p className="text-sm font-semibold">{variant.purchased}</p>
+          <p className="text-[10px] text-gray-500">進貨</p>
         </div>
         <div>
-          <p className="text-lg font-bold text-yellow-600">{variant.defective}</p>
-          <p className="text-xs text-gray-500">瑕疵</p>
+          <p className="text-sm font-semibold text-yellow-600">{variant.defective}</p>
+          <p className="text-[10px] text-gray-500">瑕疵</p>
         </div>
         <div>
-          <p className="text-lg font-bold text-red-600">{variant.sold}</p>
-          <p className="text-xs text-gray-500">已售</p>
+          <p className="text-sm font-semibold text-red-600">{variant.sold}</p>
+          <p className="text-[10px] text-gray-500">已售</p>
         </div>
         <div>
-          <p className={`text-lg font-bold ${available > 0 ? "text-green-600" : "text-red-600"}`}>
+          <p className={`text-sm font-semibold ${available > 0 ? "text-green-600" : "text-red-600"}`}>
             {available}
           </p>
-          <p className="text-xs text-gray-500">庫存</p>
+          <p className="text-[10px] text-gray-500">庫存</p>
         </div>
       </div>
     </SortableCard>
