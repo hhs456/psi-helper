@@ -5,6 +5,26 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.13.0] - 2026-09-12
+
+### 新增
+
+- **資料庫備份腳本**：新增 `scripts/backup-db.ts`，可匯出所有資料表為 JSON 格式
+- **資料庫還原腳本**：新增 `scripts/restore-db.ts`，支援清空還原和合併還原兩種模式
+- **GitHub Actions 自動備份**：每天 UTC 00:00（台灣時間 08:00）自動備份到 GitHub Releases
+- **備份清理機制**：自動保留最近 7 份備份，舊的會自動刪除
+
+### 新增指令
+
+- `npm run backup` - 手動執行資料庫備份
+- `npm run restore` - 手動執行資料庫還原（互動式選擇備份檔）
+
+### 新增檔案
+
+- `scripts/backup-db.ts` - 資料庫備份腳本
+- `scripts/restore-db.ts` - 資料庫還原腳本
+- `.github/workflows/backup.yml` - GitHub Actions 自動備份工作流程
+
 ## [0.12.0] - 2026-09-12
 
 ### 修復

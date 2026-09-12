@@ -1,0 +1,57 @@
+name: Database Backup
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 每天 UTC 00:00 (台灣時間 08:00)
+  workflow_dispatch:      # 允許手動觸發
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backup
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/backup-db.ts
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="backup-$(date +%Y%m%d-%H%M%S)"
+          BACKUP_FILE=$(ls backups/*.json | head -1)
+          
+          gh release create "$TAG" \
+            "$BACKUP_FILE" \
+            --title "Database Backup $(date +%Y-%m-%d)" \
+            --notes "自動備份於 $(date '+%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: Cleanup old releases (keep last 7)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASES=$(gh release list --limit 100 --json tagName,createdAt | \
+            jq -r 'sort_by(.createdAt) | reverse | .[7:] | .[].tagName')
+          
+          for TAG in $RELEASES; do
+            echo "刪除舊備份: $TAG"
+            gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          done
