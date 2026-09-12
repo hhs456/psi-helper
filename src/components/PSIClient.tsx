@@ -33,7 +33,9 @@ export function PSIClient({ pageSize }: { pageSize: number }) {
     return <div className="text-red-500">載入失敗：{error.message}</div>;
   }
 
-  if (items.length === 0) {
+  const hasNoFilters = !searchQuery && !selectedSupplier;
+
+  if (items.length === 0 && hasNoFilters) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-500">
         <Package size={48} className="mb-4" />
