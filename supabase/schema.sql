@@ -86,7 +86,7 @@ create table sales_orders (
 create table sales_items (
   id uuid primary key default uuid_generate_v4(),
   sales_order_id uuid references sales_orders(id) on delete cascade,
-  color_variant_id uuid references color_variants(id) on delete restrict,
+  color_variant_id uuid references color_variants(id) on delete cascade,
   quantity integer not null,
   unit_price numeric(10, 2) not null,
   amount numeric(10, 2) not null
