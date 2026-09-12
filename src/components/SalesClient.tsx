@@ -221,15 +221,22 @@ export function SalesClient({
     const variant = variants.find((v) => v.id === selectedVariantId);
     if (!variant) return;
 
-    if (!editingOrder) {
-      const available = variant.purchased - variant.defective - variant.sold;
-      const existingQty = orderItems
-        .filter((item) => item.color_variant_id === selectedVariantId)
-        .reduce((sum, item) => sum + item.quantity, 0);
-      if (itemQuantity + existingQty > available) {
-        alert(`庫存不足！目前可用庫存為 ${available}，已加入 ${existingQty}`);
-        return;
-      }
+    const available = variant.purchased - variant.defective - variant.sold;
+    const existingQty = orderItems
+      .filter((item) => item.color_variant_id === selectedVariantId)
+      .reduce((sum, item) => sum + item.quantity, 0);
+
+    let originalOrderQty = 0;
+    if (editingOrder) {
+      originalOrderQty = (editingOrder.sales_items as { color_variant_id: string; quantity: number }[] | undefined)
+        ?.filter((item) => item.color_variant_id === selectedVariantId)
+        .reduce((sum, item) => sum + item.quantity, 0) || 0;
+    }
+
+    const effectiveAvailable = available + originalOrderQty - existingQty;
+    if (itemQuantity > effectiveAvailable) {
+      alert(`庫存不足！目前可用庫存為 ${effectiveAvailable}`);
+      return;
     }
 
     const existingIdx = orderItems.findIndex((item) => item.color_variant_id === selectedVariantId);

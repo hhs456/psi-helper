@@ -348,6 +348,18 @@ export function ProductDetailClient() {
     e.preventDefault();
     if (!selectedVariant) return;
 
+    const available = selectedVariant.purchased - selectedVariant.defective - selectedVariant.sold;
+
+    if (logForm.type === "defect" && logForm.quantity > available) {
+      alert(`庫存不足！可用庫存：${available}`);
+      return;
+    }
+
+    if (logForm.type === "sale" && logForm.quantity > available) {
+      alert(`庫存不足！可用庫存：${available}`);
+      return;
+    }
+
     const supabase = createClient();
 
     const { error: logError } = await supabase.from("stock_logs").insert([
