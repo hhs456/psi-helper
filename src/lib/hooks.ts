@@ -212,13 +212,20 @@ export function useProductDetail(productId: string) {
   };
 }
 
-export function useProducts(page: number = 1, pageSize: number = 20) {
+export type ProductFilter = "all" | "no-stock" | "partial" | "no-image" | "no-variants";
+
+export interface ProductFilters {
+  searchQuery?: string;
+  productFilter?: ProductFilter;
+}
+
+export function useProducts(page: number = 1, pageSize: number = 20, filters: ProductFilters = {}) {
+  const { searchQuery = "", productFilter = "all" } = filters;
+
   const fetcher = async () => {
     const supabase = createClient();
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
 
-    const [productsRes, suppliersRes, countRes] = await Promise.all([
+    const [productsRes, suppliersRes] = await Promise.all([
       supabase
         .from("products")
         .select(`
@@ -237,30 +244,62 @@ export function useProducts(page: number = 1, pageSize: number = 20) {
         `)
         .order("is_pinned", { ascending: false })
         .order("sort_order", { ascending: false })
-        .order("created_at", { ascending: true })
-        .range(from, to),
+        .order("created_at", { ascending: true }),
       supabase.from("suppliers").select("*").order("name"),
-      supabase.from("products").select("id", { count: "exact", head: true }),
     ]);
 
     if (productsRes.error) throw productsRes.error;
-    
-    const totalProducts = countRes.count || 0;
+
+    let allProducts = (productsRes.data || []) as ProductWithSupplierAndVariants[];
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      allProducts = allProducts.filter((p) =>
+        p.name.toLowerCase().includes(query) ||
+        (p.code && p.code.toLowerCase().includes(query))
+      );
+    }
+
+    if (productFilter !== "all") {
+      allProducts = allProducts.filter((product) => {
+        if (productFilter === "no-stock") {
+          if (!product.variants || product.variants.length === 0) return false;
+          return product.variants.every((v) => v.purchased - v.defective - v.sold <= 0);
+        } else if (productFilter === "partial") {
+          if (!product.variants || product.variants.length === 0) return false;
+          const someOutOfStock = product.variants.some((v) => v.purchased - v.defective - v.sold <= 0);
+          const someInStock = product.variants.some((v) => v.purchased - v.defective - v.sold > 0);
+          return someOutOfStock && someInStock;
+        } else if (productFilter === "no-image") {
+          return !product.image_url;
+        } else if (productFilter === "no-variants") {
+          return !product.variants || product.variants.length === 0;
+        }
+        return true;
+      });
+    }
+
+    const totalProducts = allProducts.length;
     const totalPages = Math.ceil(totalProducts / pageSize);
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginatedProducts = allProducts.slice(from, to);
 
     return {
-      products: (productsRes.data || []) as ProductWithSupplierAndVariants[],
+      products: paginatedProducts,
       suppliers: (suppliersRes.data || []) as Supplier[],
       totalPages,
+      allProducts,
     };
   };
 
-  const { data, error, isLoading, mutate } = useSWR(["products", page, pageSize], fetcher, swrOptions);
+  const { data, error, isLoading, mutate } = useSWR(["products", page, pageSize, searchQuery, productFilter], fetcher, swrOptions);
 
   return {
     products: data?.products || [],
     suppliers: data?.suppliers || [],
     totalPages: data?.totalPages || 1,
+    allProducts: data?.allProducts || [],
     isLoading,
     error,
     mutate,
@@ -283,36 +322,78 @@ export interface PSIItem {
   }[];
 }
 
-export function usePSI(page: number = 1, pageSize: number = 20) {
+export type PSISortOption = "default" | "purchased-desc" | "purchased-asc" | "sold-desc" | "sold-asc" | "stock-desc" | "stock-asc";
+
+export interface PSIFilters {
+  searchQuery?: string;
+  supplierName?: string;
+  sortBy?: PSISortOption;
+}
+
+export function usePSI(page: number = 1, pageSize: number = 20, filters: PSIFilters = {}) {
+  const { searchQuery = "", supplierName = "", sortBy = "default" } = filters;
+
   const fetcher = async () => {
     const supabase = createClient();
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
+    let query = supabase
+      .from("products")
+      .select(`
+        id,
+        name,
+        code,
+        image_url,
+        supplier:supplier_id (
+          name
+        ),
+        variants:color_variants (
+          color,
+          size,
+          purchased,
+          defective,
+          sold
+        )
+      `);
+
+    if (searchQuery) {
+      query = query.or(`name.ilike.%${searchQuery}%,code.ilike.%${searchQuery}%,supplier.name.ilike.%${searchQuery}%`);
+    }
+
+    if (supplierName) {
+      query = query.eq("supplier.name", supplierName);
+    }
+
+    switch (sortBy) {
+      case "purchased-desc":
+      case "purchased-asc":
+      case "sold-desc":
+      case "sold-asc":
+      case "stock-desc":
+      case "stock-asc":
+        break;
+      default:
+        query = query
+          .order("is_pinned", { ascending: false })
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: true });
+    }
+
     const [productsRes, countRes] = await Promise.all([
-      supabase
-        .from("products")
-        .select(`
-          id,
-          name,
-          code,
-          image_url,
-          supplier:supplier_id (
-            name
-          ),
-          variants:color_variants (
-            color,
-            size,
-            purchased,
-            defective,
-            sold
-          )
-        `)
-        .order("is_pinned", { ascending: false })
-        .order("sort_order", { ascending: false })
-        .order("created_at", { ascending: true })
-        .range(from, to),
-      supabase.from("products").select("id", { count: "exact", head: true }),
+      query.range(from, to),
+      searchQuery || supplierName
+        ? supabase.from("products").select("id", { count: "exact", head: true }).then((res) => {
+            let countQuery = supabase.from("products").select("id", { count: "exact", head: true });
+            if (searchQuery) {
+              countQuery = countQuery.or(`name.ilike.%${searchQuery}%,code.ilike.%${searchQuery}%,supplier.name.ilike.%${searchQuery}%`);
+            }
+            if (supplierName) {
+              countQuery = countQuery.eq("supplier.name", supplierName);
+            }
+            return countQuery;
+          })
+        : supabase.from("products").select("id", { count: "exact", head: true }),
     ]);
 
     if (productsRes.error) throw productsRes.error;
@@ -321,7 +402,7 @@ export function usePSI(page: number = 1, pageSize: number = 20) {
     const totalPages = Math.ceil(totalProducts / pageSize);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items: PSIItem[] = (productsRes.data || []).map((p: any) => {
+    let items: PSIItem[] = (productsRes.data || []).map((p: any) => {
       const supplierName = Array.isArray(p.supplier)
         ? p.supplier[0]?.name || "未設定"
         : p.supplier?.name || "未設定";
@@ -342,13 +423,37 @@ export function usePSI(page: number = 1, pageSize: number = 20) {
       };
     });
 
+    const getTotal = (item: PSIItem, field: "purchased" | "defective" | "sold" | "available") =>
+      item.variants.reduce((sum, v) => sum + v[field], 0);
+
+    switch (sortBy) {
+      case "purchased-desc":
+        items.sort((a, b) => getTotal(b, "purchased") - getTotal(a, "purchased"));
+        break;
+      case "purchased-asc":
+        items.sort((a, b) => getTotal(a, "purchased") - getTotal(b, "purchased"));
+        break;
+      case "sold-desc":
+        items.sort((a, b) => getTotal(b, "sold") - getTotal(a, "sold"));
+        break;
+      case "sold-asc":
+        items.sort((a, b) => getTotal(a, "sold") - getTotal(b, "sold"));
+        break;
+      case "stock-desc":
+        items.sort((a, b) => getTotal(b, "available") - getTotal(a, "available"));
+        break;
+      case "stock-asc":
+        items.sort((a, b) => getTotal(a, "available") - getTotal(b, "available"));
+        break;
+    }
+
     return {
       items,
       totalPages,
     };
   };
 
-  const { data, error, isLoading, mutate } = useSWR(["psi", page, pageSize], fetcher, swrOptions);
+  const { data, error, isLoading, mutate } = useSWR(["psi", page, pageSize, searchQuery, supplierName, sortBy], fetcher, swrOptions);
 
   return {
     items: data?.items || [],

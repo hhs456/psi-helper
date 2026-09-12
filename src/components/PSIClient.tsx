@@ -1,56 +1,25 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PSICard } from "@/components/ui/PSICard";
 import { Pagination } from "@/components/ui/Pagination";
-import { Package, Search, Loader2, ArrowUpDown } from "lucide-react";
-import { usePSI, PSIItem } from "@/lib/hooks";
-
-type SortOption = "default" | "purchased-desc" | "purchased-asc" | "sold-desc" | "sold-asc" | "stock-desc" | "stock-asc";
+import { Package, Search, Loader2, ArrowUpDown, Filter } from "lucide-react";
+import { usePSI, useSuppliers, PSISortOption } from "@/lib/hooks";
 
 export function PSIClient({ pageSize }: { pageSize: number }) {
   const searchParams = useSearchParams();
   const currentPage = parseInt(searchParams.get("page") || "1");
-  const { items, totalPages, isLoading, error } = usePSI(currentPage, pageSize);
+  const { suppliers } = useSuppliers();
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("default");
+  const [sortBy, setSortBy] = useState<PSISortOption>("default");
+  const [selectedSupplier, setSelectedSupplier] = useState("");
 
-  const getTotal = (item: PSIItem, field: "purchased" | "defective" | "sold" | "available") =>
-    item.variants.reduce((sum, v) => sum + v[field], 0);
-
-  const filteredItems = useMemo(() => {
-    const result = items.filter((item) => {
-      const query = searchQuery.toLowerCase();
-      return (
-        item.product_name.toLowerCase().includes(query) ||
-        (item.product_code && item.product_code.toLowerCase().includes(query)) ||
-        item.supplier_name.toLowerCase().includes(query)
-      );
-    });
-
-    switch (sortBy) {
-      case "purchased-desc":
-        result.sort((a, b) => getTotal(b, "purchased") - getTotal(a, "purchased"));
-        break;
-      case "purchased-asc":
-        result.sort((a, b) => getTotal(a, "purchased") - getTotal(b, "purchased"));
-        break;
-      case "sold-desc":
-        result.sort((a, b) => getTotal(b, "sold") - getTotal(a, "sold"));
-        break;
-      case "sold-asc":
-        result.sort((a, b) => getTotal(a, "sold") - getTotal(b, "sold"));
-        break;
-      case "stock-desc":
-        result.sort((a, b) => getTotal(b, "available") - getTotal(a, "available"));
-        break;
-      case "stock-asc":
-        result.sort((a, b) => getTotal(a, "available") - getTotal(b, "available"));
-        break;
-    }
-    return result;
-  }, [items, searchQuery, sortBy]);
+  const { items, totalPages, isLoading, error } = usePSI(currentPage, pageSize, {
+    searchQuery,
+    supplierName: selectedSupplier,
+    sortBy,
+  });
 
   if (isLoading) {
     return (
@@ -89,12 +58,25 @@ export function PSIClient({ pageSize }: { pageSize: number }) {
         </div>
       </div>
 
-      <div className="mb-4">
-        <div className="flex items-center gap-2">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1">
+          <Filter size={16} className="text-gray-500" />
+          <select
+            value={selectedSupplier}
+            onChange={(e) => setSelectedSupplier(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            <option value="">全部供應商</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 flex-1">
           <ArrowUpDown size={16} className="text-gray-500" />
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            onChange={(e) => setSortBy(e.target.value as PSISortOption)}
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="default">預設排序</option>
@@ -108,14 +90,14 @@ export function PSIClient({ pageSize }: { pageSize: number }) {
         </div>
       </div>
 
-      {filteredItems.length === 0 ? (
+      {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <Package size={48} className="mb-4" />
           <p className="text-lg">找不到符合條件的商品</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredItems.map((item) => (
+          {items.map((item) => (
             <PSICard
               key={item.product_id}
               product={{

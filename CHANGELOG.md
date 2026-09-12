@@ -5,6 +5,31 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.20.0] - 2026-09-12
+
+### 改進
+
+- **進銷明細**：商品卡數字顏色統一比照商品詳情頁
+  - 進貨：預設黑色（原藍色）
+  - 瑕疵：黃色（原紅色）
+  - 銷售：紅色（原綠色）
+  - 庫存：有庫存綠色 / 無庫存紅色（原有庫存深灰 / 無庫存紅色）
+- **進銷明細**：新增供應商篩選下拉選單，可快速篩選特定供應商的商品
+
+### 修復
+
+- **分頁與篩選衝突**：修復篩選結果受分頁影響的問題
+  - `usePSI` hook 現在支援後端搜尋和供應商篩選
+  - `useProducts` hook 現在支援前端篩選後再分頁
+  - 篩選統計數字（如「無庫存 (5)」）現在基於全部資料計算，而非僅當前頁面
+
+### 修改檔案
+
+- `src/components/ui/PSICard.tsx` - 數字顏色統一
+- `src/components/PSIClient.tsx` - 新增供應商篩選、移除前端篩選邏輯
+- `src/components/ProductsClient.tsx` - 移除前端篩選邏輯，改用 hook 處理
+- `src/lib/hooks.ts` - `usePSI` 和 `useProducts` 支援篩選參數
+
 ## [0.19.0] - 2026-09-12
 
 ### 改進

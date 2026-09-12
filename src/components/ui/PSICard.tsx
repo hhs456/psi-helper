@@ -85,10 +85,10 @@ export function PSICard({ product }: { product: PSICardData }) {
                     {variant.color}
                     {variant.size && <span className="text-gray-400">/{variant.size}</span>}
                   </td>
-                  <td className="px-2 py-1.5 text-right text-blue-600">{variant.purchased}</td>
-                  <td className="px-2 py-1.5 text-right text-red-600">{variant.defective}</td>
-                  <td className="px-2 py-1.5 text-right text-green-600">{variant.sold}</td>
-                  <td className={`px-2 py-1.5 text-right font-medium ${variant.available > 0 ? "text-gray-900" : "text-red-600"}`}>
+                  <td className="px-2 py-1.5 text-right">{variant.purchased}</td>
+                  <td className="px-2 py-1.5 text-right text-yellow-600">{variant.defective}</td>
+                  <td className="px-2 py-1.5 text-right text-red-600">{variant.sold}</td>
+                  <td className={`px-2 py-1.5 text-right font-medium ${variant.available > 0 ? "text-green-600" : "text-red-600"}`}>
                     {variant.available}
                   </td>
                 </tr>
@@ -96,10 +96,10 @@ export function PSICard({ product }: { product: PSICardData }) {
               {product.variants.length > 1 && (
                 <tr className="border-t border-gray-200 bg-gray-50 font-medium">
                   <td className="px-2 py-1.5 text-gray-700">合計</td>
-                  <td className="px-2 py-1.5 text-right text-blue-600">{totals.purchased}</td>
-                  <td className="px-2 py-1.5 text-right text-red-600">{totals.defective}</td>
-                  <td className="px-2 py-1.5 text-right text-green-600">{totals.sold}</td>
-                  <td className={`px-2 py-1.5 text-right ${totals.available > 0 ? "text-gray-900" : "text-red-600"}`}>
+                  <td className="px-2 py-1.5 text-right">{totals.purchased}</td>
+                  <td className="px-2 py-1.5 text-right text-yellow-600">{totals.defective}</td>
+                  <td className="px-2 py-1.5 text-right text-red-600">{totals.sold}</td>
+                  <td className={`px-2 py-1.5 text-right ${totals.available > 0 ? "text-green-600" : "text-red-600"}`}>
                     {totals.available}
                   </td>
                 </tr>
