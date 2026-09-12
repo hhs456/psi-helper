@@ -24,6 +24,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "PSI Helper",
   },
+  other: {
+    "apple-touch-icon": "/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {

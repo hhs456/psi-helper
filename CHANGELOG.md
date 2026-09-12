@@ -5,6 +5,39 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.11.0] - 2026-09-12
+
+### 架構改進
+
+- **共用化拖曳排序邏輯**：新增 `useSortableList` hook，統一管理拖曳排序邏輯
+  - 支援分組排序（依 `is_pinned` 或自訂分組鍵）
+  - 修復商品詳情頁款式拖曳排序失效的 BUG
+  - 未來修改排序邏輯只需修改一處
+- **共用化釘選邏輯**：新增 `usePin` hook，統一管理釘選功能
+- **共用化圖片上傳邏輯**：新增 `useImageUpload` hook，封裝圖片壓縮與上傳流程
+- **共用化可排序卡片元件**：新增 `SortableCard` 和 `DragHandle` 元件
+
+### 介面改善
+
+- **商品管理頁**：商品名稱現在可直接點擊進入詳情頁（與供應商詳情頁一致）
+- **PWA 圖示優化**：
+  - 將 SVG 圖示轉換為 PNG 格式，解決部分手機瀏覽器無法顯示圖示的問題
+  - 新增 `maskable` 圖示支援 Android 自適應圖示
+  - 新增 `apple-touch-icon` 支援 iOS 裝置
+
+### 新增檔案
+
+- `src/lib/useSortableList.ts` - 拖曳排序 hook
+- `src/lib/usePin.ts` - 釘選功能 hook
+- `src/lib/useImageUpload.ts` - 圖片上傳 hook
+- `src/components/ui/SortableCard.tsx` - 可排序卡片元件
+- `public/icon-192.png` - PWA 圖示（192x192）
+- `public/icon-512.png` - PWA 圖示（512x512）
+
+### 修復
+
+- **商品詳情頁款式拖曳排序失效**：原本只更新 `sort_order` 但沒有改變陣列順序，導致 UI 渲染時卡片「彈回」原位
+
 ## [0.10.0] - 2026-09-11
 
 ### 效能優化

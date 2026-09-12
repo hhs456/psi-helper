@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
 import {
   ArrowLeft,
   Plus,
@@ -20,32 +21,18 @@ import {
   ChevronRight,
   Pin,
   PinOff,
-  GripVertical,
   Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useProductDetail } from "@/lib/hooks";
+import { useSortableList } from "@/lib/useSortableList";
+import { usePin } from "@/lib/usePin";
 import type { ColorVariant, StockLog } from "@/types";
 
-function SortableVariantCard({
+function VariantCard({
   variant,
   onPin,
   onLog,
@@ -58,42 +45,13 @@ function SortableVariantCard({
   onEdit: (variant: ColorVariant) => void;
   onDelete: (id: string) => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: variant.id,
-    data: { isPinned: variant.is_pinned },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
   const available = variant.purchased - variant.defective - variant.sold;
 
   return (
-    <Card
-      ref={setNodeRef}
-      style={style}
-      className={`p-4 ${variant.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
-    >
+    <SortableCard id={variant.id} isPinned={variant.is_pinned} className="p-4">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <div
-            className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-gray-400 hover:text-gray-600 touch-none"
-            title="拖曳排序"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical size={14} />
-          </div>
+          <DragHandle className="-ml-1 p-1" iconSize={14} />
           <h3 className="font-semibold text-gray-900">{variant.color}</h3>
         </div>
         <div className="flex gap-1">
@@ -145,7 +103,7 @@ function SortableVariantCard({
           <p className="text-xs text-gray-500">庫存</p>
         </div>
       </div>
-    </Card>
+    </SortableCard>
   );
 }
 
@@ -160,7 +118,6 @@ export function ProductDetailClient() {
   const [stockLogsLoading, setStockLogsLoading] = useState(false);
   const [prevProductId, setPrevProductId] = useState(productId);
 
-  // Reset local state when productId changes
   if (prevProductId !== productId) {
     setPrevProductId(productId);
     setVariants([]);
@@ -197,16 +154,22 @@ export function ProductDetailClient() {
   const [expandSaleDetails, setExpandSaleDetails] = useState(false);
   const [isLogSectionExpanded, setIsLogSectionExpanded] = useState(false);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
+    items: variants,
+    tableName: "color_variants",
+    getGroupKey: (v) => `${v.is_pinned}_${v.size || "均碼"}`,
+    onReorder: setVariants,
+  });
+
+  const { handlePin: handlePinVariant } = usePin({
+    items: variants,
+    tableName: "color_variants",
+    onUpdate: setVariants,
+  });
+
+  async function handleDragEnd(event: DragEndEvent) {
+    await handleSortableDragEnd(event);
+  }
 
   const variantsBySize = useMemo(() => {
     return variants.reduce<Record<string, ColorVariant[]>>((acc, v) => {
@@ -280,7 +243,6 @@ export function ProductDetailClient() {
     }
   }
 
-  // Show loading on initial load or when switching products
   if (isLoading || (isValidating && variants.length === 0)) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -571,86 +533,6 @@ export function ProductDetailClient() {
     setStockLogs(stockLogs.filter((log) => log.color_variant_id !== variantId));
   }
 
-  async function handlePinVariant(id: string, currentIsPinned: boolean) {
-    const supabase = createClient();
-
-    const updateData: Record<string, boolean | number> = {
-      is_pinned: !currentIsPinned,
-    };
-    if (!currentIsPinned) {
-      const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
-      updateData.sort_order = maxOrder + 1;
-    }
-
-    const { error } = await supabase
-      .from("color_variants")
-      .update(updateData)
-      .eq("id", id);
-
-    if (error) {
-      alert("操作失敗：" + error.message);
-      return;
-    }
-
-    setVariants(
-      variants.map((v) =>
-        v.id === id ? { ...v, ...updateData } : v
-      )
-    );
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-
-    if (!over || active.id === over.id) return;
-
-    const activeVariant = variants.find((v) => v.id === active.id);
-    const overVariant = variants.find((v) => v.id === over.id);
-
-    if (!activeVariant || !overVariant) return;
-
-    const activeSize = activeVariant.size || "均碼";
-    const overSize = overVariant.size || "均碼";
-
-    if (activeSize !== overSize) return;
-    if (activeVariant.is_pinned !== overVariant.is_pinned) return;
-
-    const sizeVariants = variants.filter((v) => (v.size || "均碼") === activeSize);
-    const oldIndex = sizeVariants.findIndex((v) => v.id === active.id);
-    const newIndex = sizeVariants.findIndex((v) => v.id === over.id);
-
-    const newSizeVariants = arrayMove(sizeVariants, oldIndex, newIndex);
-
-    const pinnedGroup = newSizeVariants.filter((v) => v.is_pinned);
-    const unpinnedGroup = newSizeVariants.filter((v) => !v.is_pinned);
-
-    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
-      id: item.id,
-      sort_order: newSizeVariants.length - idx,
-    }));
-
-    const newVariants = variants.map((v) => {
-      if ((v.size || "均碼") !== activeSize) return v;
-      const update = updates.find((u) => u.id === v.id);
-      if (update) {
-        return { ...v, sort_order: update.sort_order };
-      }
-      return v;
-    });
-
-    setVariants(newVariants);
-
-    const supabase = createClient();
-    const { error } = await supabase.rpc("batch_update_sort_order", {
-      p_table_name: "color_variants",
-      p_items: updates,
-    });
-
-    if (error) {
-      console.error("排序更新失敗:", error);
-    }
-  }
-
   return (
     <div>
       <button
@@ -771,7 +653,7 @@ export function ProductDetailClient() {
                         >
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                             {sizeVariants.map((variant) => (
-                              <SortableVariantCard
+                              <VariantCard
                                 key={variant.id}
                                 variant={variant}
                                 onPin={handlePinVariant}
