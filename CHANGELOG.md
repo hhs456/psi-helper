@@ -5,6 +5,22 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.21.1] - 2026-09-12
+
+### 修復
+
+- **手機版側邊欄**：修復手機版側邊欄打開時無法正常展開的問題
+  - 新增 `useIsMobile()` hook，使用 `matchMedia` 判斷手機裝置
+  - 手機版打開側邊欄時自動展開，不受 `isCollapsed` 狀態影響
+- **進銷明細表格寬度**：修復手機版進銷明細頁面表格寬度跑掉的問題
+  - `PSICard` 表格改用 `table-fixed` 固定欄位配置
+  - 各欄位設定固定寬度比例，避免內容過長時寬度不一致
+
+### 修改檔案
+
+- `src/components/Sidebar.tsx` - 新增 `useIsMobile()` hook，手機版打開時強制展開
+- `src/components/ui/PSICard.tsx` - 表格改用 `table-fixed`，固定欄位寬度
+
 ## [0.21.0] - 2026-09-12
 
 ### 改進

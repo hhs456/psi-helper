@@ -22,14 +22,29 @@ const navigation = [
   { name: "進銷明細", href: "/psi", icon: BarChart3 },
 ];
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  return isMobile;
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     const saved = localStorage.getItem("sidebar-collapsed");
     if (saved !== null) return saved === "true";
-    return window.innerWidth < 1024;
+    return false;
   });
 
   useEffect(() => {
@@ -45,11 +60,18 @@ export function Sidebar() {
     localStorage.setItem("sidebar-collapsed", String(next));
   };
 
+  const handleMobileMenuClick = () => {
+    if (!isOpen) {
+      setIsCollapsed(false);
+    }
+    setIsOpen(!isOpen);
+  };
+
   return (
     <>
       {/* Mobile menu button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleMobileMenuClick}
         className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-white shadow-md border border-gray-200"
       >
         {isOpen ? <X size={20} /> : <Menu size={20} />}
