@@ -5,6 +5,23 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.17.0] - 2026-09-12
+
+### 改進
+
+- **進銷明細**：排序選項改為升冪優先（低 → 高），再降冪（高 → 低）
+- **庫存總覽**：頂部統計「缺貨」改為「無庫存」
+- **庫存總覽**：排序選項「無庫存」移至第二位（預設排序下方）
+- **拖曳排序**：碰撞偵測從 `closestCenter` 改為 `closestCorners`，修正寬螢幕多行網格佈局下拖曳顯示異常
+
+### 修改檔案
+
+- `src/components/PSIClient.tsx` - 排序選項調整
+- `src/components/HomeClient.tsx` - 統計文字和排序順序調整
+- `src/components/ProductsClient.tsx` - 碰撞偵測修正
+- `src/components/SuppliersClient.tsx` - 碰撞偵測修正
+- `src/app/suppliers/[id]/page.tsx` - 碰撞偵測修正
+
 ## [0.16.0] - 2026-09-12
 
 ### 新增

@@ -98,12 +98,12 @@ export function PSIClient({ pageSize }: { pageSize: number }) {
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="default">預設排序</option>
-            <option value="purchased-desc">進貨：多 → 少</option>
-            <option value="purchased-asc">進貨：少 → 多</option>
-            <option value="sold-desc">銷售：多 → 少</option>
-            <option value="sold-asc">銷售：少 → 多</option>
-            <option value="stock-desc">庫存：多 → 少</option>
-            <option value="stock-asc">庫存：少 → 多</option>
+            <option value="purchased-asc">進貨：低 → 高</option>
+            <option value="purchased-desc">進貨：高 → 低</option>
+            <option value="sold-asc">銷售：低 → 高</option>
+            <option value="sold-desc">銷售：高 → 低</option>
+            <option value="stock-asc">庫存：低 → 高</option>
+            <option value="stock-desc">庫存：高 → 低</option>
           </select>
         </div>
       </div>

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, Search, Loader2 } from "lucide-react";
-import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { DndContext, closestCorners, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useProducts } from "@/lib/hooks";
 import { useSortableList } from "@/lib/useSortableList";
@@ -201,7 +201,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={closestCorners}
           onDragEnd={handleDragEnd}
         >
           <SortableContext

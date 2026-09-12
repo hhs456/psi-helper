@@ -126,7 +126,7 @@ export function HomeClient() {
           </div>
           <div>
             <p className="text-2xl font-bold text-red-600">{stats.outOfStock}</p>
-            <p className="text-xs text-gray-500">缺貨</p>
+            <p className="text-xs text-gray-500">無庫存</p>
           </div>
         </div>
       </div>
@@ -153,9 +153,9 @@ export function HomeClient() {
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="default">預設排序</option>
+            <option value="out-of-stock">無庫存</option>
             <option value="stock-asc">庫存：低 → 高</option>
             <option value="stock-desc">庫存：高 → 低</option>
-            <option value="out-of-stock">無庫存</option>
             <option value="variants-desc">品項：多 → 少</option>
             <option value="variants-asc">品項：少 → 多</option>
           </select>
