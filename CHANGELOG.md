@@ -5,7 +5,77 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
-## [0.19.0] - 2026-09-12
+## [0.17.1] - 2026-09-12
+
+### 修復
+
+- **手機版側邊欄**：修復手機版側邊欄打開時無法正常展開的問題
+  - 新增 `useIsMobile()` hook，使用 `matchMedia` 判斷手機裝置
+  - 手機版打開側邊欄時自動展開，不受 `isCollapsed` 狀態影響
+- **進銷明細表格寬度**：修復手機版進銷明細頁面表格寬度跑掉的問題
+  - `PSICard` 表格改用 `table-fixed` 固定欄位配置
+  - 各欄位設定固定寬度比例，避免內容過長時寬度不一致
+
+### 修改檔案
+
+- `src/components/Sidebar.tsx` - 新增 `useIsMobile()` hook，手機版打開時強制展開
+- `src/components/ui/PSICard.tsx` - 表格改用 `table-fixed`，固定欄位寬度
+
+## [0.17.0] - 2026-09-12
+
+### 改進
+
+- **側邊欄可收合**：新增側邊欄收合/展開功能，預設在平板尺寸（< 1024px）收合為圖示模式
+  - 桌面版可點擊側邊欄右側的箭頭按鈕切換收合狀態
+  - 收合狀態透過 localStorage 持久化，重新整理後保留偏好
+  - 主內容區域寬度會跟隨側邊欄寬度自動調整
+  - 收合時顯示圖示，展開時顯示完整文字標籤
+
+### 修復
+
+- **篩選標籤數字不正確**：修復篩選標籤旁的統計數字受當前篩選條件影響的問題
+  - `useProducts` hook 新增回傳 `rawAllProducts`（未篩選的完整商品列表）
+  - `filterStats` 改從 `rawAllProducts` 計算，確保數字反映全部資料
+- **篩選後分頁超出範圍**：修復在第 2 頁之後切換篩選條件時，因結果數量不足而顯示空白頁的問題
+  - 商品管理和進銷明細頁面現在偵測篩選/搜尋/排序條件改變時，自動重置頁碼到第 1 頁
+
+### 修改檔案
+
+- `src/components/Sidebar.tsx` - 新增收合功能、CSS variable 同步
+- `src/app/layout.tsx` - 主內容區域改用 CSS variable 控制 margin
+- `src/app/globals.css` - 新增 `--sidebar-width` CSS variable
+- `src/lib/hooks.ts` - `useProducts` 新增 `rawAllProducts` 回傳值
+- `src/components/ProductsClient.tsx` - 使用 `rawAllProducts` 計算篩選統計 + 篩選改變時重置頁碼
+- `src/components/PSIClient.tsx` - 篩選/搜尋/排序改變時重置頁碼
+
+## [0.16.1] - 2026-09-12
+
+### 改進
+
+- **進銷明細**：商品卡數字顏色統一比照商品詳情頁
+  - 進貨：預設黑色（原藍色）
+  - 瑕疵：黃色（原紅色）
+  - 銷售：紅色（原綠色）
+  - 庫存：有庫存綠色 / 無庫存紅色（原有庫存深灰 / 無庫存紅色）
+- **進銷明細**：新增供應商篩選下拉選單，可快速篩選特定供應商的商品
+
+### 修復
+
+- **分頁與篩選衝突**：修復篩選結果受分頁影響的問題
+  - `usePSI` hook 現在支援前端搜尋和供應商篩選後再分頁
+  - `useProducts` hook 現在支援前端篩選後再分頁
+  - 篩選統計數字（如「無庫存 (5)」）現在基於全部資料計算，而非僅當前頁面
+- **進銷明細供應商篩選**：修復 Supabase 不支援關聯表欄位篩選的問題，改為前端篩選
+- **進銷明細空狀態**：修復篩選後無結果時整頁被替換為「尚無進銷資料」的問題，現在會保留控制項並顯示「找不到符合條件的商品」
+
+### 修改檔案
+
+- `src/components/ui/PSICard.tsx` - 數字顏色統一
+- `src/components/PSIClient.tsx` - 新增供應商篩選、移除前端篩選邏輯
+- `src/components/ProductsClient.tsx` - 移除前端篩選邏輯，改用 hook 處理
+- `src/lib/hooks.ts` - `usePSI` 和 `useProducts` 支援篩選參數
+
+## [0.16.0] - 2026-09-12
 
 ### 改進
 
@@ -21,7 +91,7 @@
 - `src/components/SuppliersClient.tsx` - 新增排序和篩選功能
 - `src/app/suppliers/[id]/page.tsx` - 新增瑕疵率顯示
 
-## [0.18.0] - 2026-09-12
+## [0.15.0] - 2026-09-12
 
 ### 改進
 
@@ -37,7 +107,7 @@
 - `src/components/ProductDetailClient.tsx` - 改用 rectSortingStrategy
 - `src/app/suppliers/[id]/page.tsx` - 改用 rectSortingStrategy
 
-## [0.17.0] - 2026-09-12
+## [0.14.1] - 2026-09-12
 
 ### 改進
 
@@ -54,7 +124,7 @@
 - `src/components/SuppliersClient.tsx` - 碰撞偵測修正
 - `src/app/suppliers/[id]/page.tsx` - 碰撞偵測修正
 
-## [0.16.0] - 2026-09-12
+## [0.14.0] - 2026-09-12
 
 ### 新增
 
@@ -82,7 +152,7 @@
 - `src/components/PSIClient.tsx` - 新增排序和分頁功能
 - `src/components/HomeClient.tsx` - 更新篩選和排序選項
 
-## [0.15.0] - 2026-09-12
+## [0.13.0] - 2026-09-12
 
 ### 新增
 
@@ -107,7 +177,7 @@
 - `src/components/SuppliersClient.tsx` - 供應商卡片顯示瑕疵率
 - `src/lib/hooks.ts` - `SupplierWithStats` 新增 `total_purchased` 和 `total_defective` 欄位
 
-## [0.14.0] - 2026-09-12
+## [0.12.0] - 2026-09-12
 
 ### 新增
 
@@ -141,7 +211,7 @@
 - `src/app/suppliers/[id]/page.tsx` - 搜尋 + 釘選排序
 - `src/lib/hooks.ts` - useProducts 加入 variants，useSuppliers 加入統計
 
-## [0.13.0] - 2026-09-12
+## [0.11.0] - 2026-09-12
 
 ### 新增
 
@@ -161,7 +231,7 @@
 - `scripts/restore-db.ts` - 資料庫還原腳本
 - `.github/workflows/backup.yml` - GitHub Actions 自動備份工作流程
 
-## [0.12.0] - 2026-09-12
+## [0.10.2] - 2026-09-12
 
 ### 修復
 
@@ -185,7 +255,7 @@
 - `public/icon-maskable-192.png` - Maskable PWA 圖示（192x192）
 - `public/icon-maskable-512.png` - Maskable PWA 圖示（512x512）
 
-## [0.11.1] - 2026-09-12
+## [0.10.1] - 2026-09-12
 
 ### 修復
 
@@ -205,7 +275,7 @@
 
 - 新增 migration 007：修正 `color_variants` 外鍵約束
 
-## [0.11.0] - 2026-09-12
+## [0.10.0] - 2026-09-12
 
 ### 架構改進
 
@@ -238,7 +308,7 @@
 
 - **商品詳情頁款式拖曳排序失效**：原本只更新 `sort_order` 但沒有改變陣列順序，導致 UI 渲染時卡片「彈回」原位
 
-## [0.10.0] - 2026-09-11
+## [0.9.0] - 2026-09-11
 
 ### 效能優化
 
@@ -259,7 +329,7 @@
 
 - `swr`: 客戶端資料快取與重新驗證
 
-## [0.9.0] - 2026-09-11
+## [0.8.0] - 2026-09-11
 
 ### 效能優化
 
@@ -314,7 +384,7 @@ END;
 $$;
 ```
 
-## [0.8.0] - 2026-09-11
+## [0.7.0] - 2026-09-11
 
 ### 效能優化
 
@@ -335,7 +405,7 @@ $$;
 - 新增 `scripts/cleanup-images.ts` 清理已刪除商品的孤立圖片
 - 新增 npm script `cleanup:images` 方便執行清理
 
-## [0.7.0] - 2026-09-11
+## [0.6.2] - 2026-09-11
 
 ### UX 改善
 
