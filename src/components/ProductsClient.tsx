@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -11,7 +11,7 @@ import { ProductCard } from "@/components/ui/ProductCard";
 import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, Search, Loader2 } from "lucide-react";
 import { DndContext, closestCorners, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
-import { useProducts } from "@/lib/hooks";
+import { useProducts, ProductFilter } from "@/lib/hooks";
 import { useSortableList } from "@/lib/useSortableList";
 import { usePin } from "@/lib/usePin";
 import { useImageUpload } from "@/lib/useImageUpload";
@@ -29,12 +29,16 @@ type ProductWithSupplier = Omit<Product, "supplier"> & {
   }[];
 };
 
-type ProductFilter = "all" | "no-stock" | "partial" | "no-image" | "no-variants";
-
 export function ProductsClient({ pageSize }: { pageSize: number }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const currentPage = parseInt(searchParams.get("page") || "1");
-  const { products, suppliers, totalPages, isLoading, error, mutate } = useProducts(currentPage, pageSize);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [productFilter, setProductFilter] = useState<ProductFilter>("all");
+  const { products, suppliers, totalPages, allProducts, rawAllProducts, isLoading, error, mutate } = useProducts(currentPage, pageSize, {
+    searchQuery,
+    productFilter,
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithSupplier | null>(null);
   const [formData, setFormData] = useState({
@@ -43,21 +47,19 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     supplier_id: "",
     notes: "",
   });
-  const [searchQuery, setSearchQuery] = useState("");
-  const [productFilter, setProductFilter] = useState<ProductFilter>("all");
   const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl, deleteImage } = useImageUpload();
 
   const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
     items: products,
     tableName: "products",
-    onReorder: (newProducts) => mutate({ products: newProducts, suppliers, totalPages }, { revalidate: false }),
+    onReorder: (newProducts) => mutate({ products: newProducts, suppliers, totalPages, allProducts, rawAllProducts }, { revalidate: false }),
     revalidate: mutate,
   });
 
   const { handlePin } = usePin({
     items: products,
     tableName: "products",
-    onUpdate: (newProducts) => mutate({ products: newProducts, suppliers, totalPages }, { revalidate: false }),
+    onUpdate: (newProducts) => mutate({ products: newProducts, suppliers, totalPages, allProducts, rawAllProducts }, { revalidate: false }),
   });
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -70,7 +72,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     let noImage = 0;
     let noVariants = 0;
 
-    products.forEach((product) => {
+    rawAllProducts.forEach((product) => {
       if (!product.image_url) noImage++;
       if (!product.variants || product.variants.length === 0) {
         noVariants++;
@@ -89,33 +91,18 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     });
 
     return { noStock, partial, noImage, noVariants };
-  }, [products]);
+  }, [rawAllProducts]);
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch =
-        product.name.toLowerCase().includes(query) ||
-        (product.code && product.code.toLowerCase().includes(query));
-      if (!matchesSearch) return false;
-
-      if (productFilter === "no-stock") {
-        if (!product.variants || product.variants.length === 0) return false;
-        return product.variants.every((v) => v.purchased - v.defective - v.sold <= 0);
-      } else if (productFilter === "partial") {
-        if (!product.variants || product.variants.length === 0) return false;
-        const someOutOfStock = product.variants.some((v) => v.purchased - v.defective - v.sold <= 0);
-        const someInStock = product.variants.some((v) => v.purchased - v.defective - v.sold > 0);
-        return someOutOfStock && someInStock;
-      } else if (productFilter === "no-image") {
-        return !product.image_url;
-      } else if (productFilter === "no-variants") {
-        return !product.variants || product.variants.length === 0;
+  const prevFilterRef = useRef({ searchQuery, productFilter });
+  useEffect(() => {
+    const prev = prevFilterRef.current;
+    if (prev.searchQuery !== searchQuery || prev.productFilter !== productFilter) {
+      prevFilterRef.current = { searchQuery, productFilter };
+      if (currentPage > 1) {
+        router.replace("/products?page=1");
       }
-
-      return true;
-    });
-  }, [products, searchQuery, productFilter]);
+    }
+  }, [searchQuery, productFilter, currentPage, router]);
 
   if (isLoading) {
     return (
@@ -293,11 +280,11 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
         </div>
       </div>
 
-      {filteredProducts.length === 0 ? (
+      {products.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <Package size={48} className="mb-4" />
-          <p className="text-lg">{products.length === 0 ? "尚無商品資料" : "找不到符合條件的商品"}</p>
-          {products.length === 0 && (
+          <p className="text-lg">{allProducts.length === 0 ? "尚無商品資料" : "找不到符合條件的商品"}</p>
+          {allProducts.length === 0 && (
             <p className="text-sm mt-2">點擊上方按鈕新增第一個商品</p>
           )}
         </div>
@@ -308,11 +295,11 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={filteredProducts.map((p) => p.id)}
+            items={products.map((p) => p.id)}
             strategy={rectSortingStrategy}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredProducts.map((product) => (
+              {products.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={{

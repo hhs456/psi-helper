@@ -1,12 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
-import { config } from 'dotenv'
 import { writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 
-config({ path: '.env.local' })
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+console.log('Environment check:')
+console.log('  NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'set' : 'not set')
+console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'not set')
+console.log('  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:', process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? 'set' : 'not set')
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('錯誤: 缺少環境變數')

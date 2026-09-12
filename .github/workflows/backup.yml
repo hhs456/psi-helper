@@ -2,7 +2,7 @@ name: Database Backup
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 每天 UTC 00:00 (台灣時間 08:00)
+    - cron: '0 15 * * *'  # 每天 UTC 15:00 (台灣時間 23:00)
   workflow_dispatch:      # 允許手動觸發
 
 permissions:
@@ -12,6 +12,9 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
       - name: Checkout repository
@@ -20,16 +23,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run backup
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx tsx scripts/backup-db.ts
 
       - name: Create Release
