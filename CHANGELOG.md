@@ -16,7 +16,6 @@
 - **庫存驗證**：記錄瑕疵/銷售前檢查可用庫存，防止負庫存
 - **銷售單編輯庫存檢查**：編輯訂單時考慮已扣除的庫存數量
 - **顏色款式刪除約束**：修正 `color_variants` 外鍵約束為 `ON DELETE CASCADE`
-- **Storage 刪除權限**：新增 Storage bucket 的 delete policy，允許刪除圖片
 
 ### 新增
 
@@ -25,9 +24,6 @@
 ### 資料遷移
 
 - 新增 migration 007：修正 `color_variants` 外鍵約束
-- 新增 migration 008：新增 Storage `product-images` bucket 的 delete policy
-
-**注意**：需在 Supabase SQL Editor 執行 `migrations/008_add_storage_delete_policy.sql` 以啟用圖片刪除功能
 
 ## [0.11.0] - 2026-09-12
 
@@ -142,15 +138,22 @@ $$;
 
 ### 效能優化
 
-- **頁面改為 Server Component**：所有主要頁面（首頁、商品、銷售、供應商、報表）改為 Server Component，資料在伺服器端預先載入，消除頁面切換時的 loading spinner
-- **新增骨架屏 loading.tsx**：每個頁面新增 `loading.tsx`，在資料載入時顯示骨架屏動畫，提供更流暢的載入體驗
+- **啟用 Cache Components**：啟用 Next.js 16 的 Cache Components 功能，頁面改為 Partial Prerendering (PPR)
+- **頁面快取**：所有主要頁面使用 `use cache: private` 和 `cacheLife("minutes")` 快取資料，減少重複查詢
 - **圖片優化**：使用 Next.js `<Image>` 元件取代原生 `<img>`，自動進行圖片 lazy loading 和格式優化
 - **Next.js Image 配置**：設定 `next.config.ts` 允許 Supabase Storage 域名
+- **移除衝突設定檔**：移除 `next.config.js` 避免與 `next.config.ts` 衝突
 
 ### 架構改進
 
 - 將頁面資料抓取邏輯移至 Server Component，互動功能拆分為獨立的 Client Component
 - 新增 Client Components：`HomeClient`、`ProductsClient`、`SalesClient`、`SuppliersClient`
+- Sidebar 元件使用 `<Suspense>` 包裝以支援 Partial Prerendering
+
+### 工具
+
+- 新增 `scripts/cleanup-images.ts` 清理已刪除商品的孤立圖片
+- 新增 npm script `cleanup:images` 方便執行清理
 
 ## [0.7.0] - 2026-09-11
 
