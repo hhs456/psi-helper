@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { compressImage } from "@/lib/image";
+import { compressImage, deleteProductImage } from "@/lib/image";
 
 export function useImageUpload() {
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -22,11 +22,7 @@ export function useImageUpload() {
     const supabase = createClient();
     let fileToUpload: Blob = imageFile;
     try {
-      fileToUpload = await compressImage(imageFile, {
-        maxWidth: 1200,
-        maxHeight: 1200,
-        quality: 0.8,
-      });
+      fileToUpload = await compressImage(imageFile);
     } catch (err) {
       console.warn("Image compression failed, using original:", err);
     }
@@ -55,5 +51,9 @@ export function useImageUpload() {
     setImageFile(null);
   }
 
-  return { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl };
+  async function deleteImage(imageUrl: string | null): Promise<void> {
+    await deleteProductImage(imageUrl);
+  }
+
+  return { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl, deleteImage };
 }

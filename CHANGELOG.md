@@ -5,6 +5,30 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.11.1] - 2026-09-12
+
+### 修復
+
+- **刪除商品時同步清理 Storage 圖片**：刪除商品時一併刪除 Supabase Storage 中的圖片檔案
+- **刪除供應商時清理所有商品圖片**：刪除供應商時一併清理其所有商品的圖片
+- **商品管理頁面資料同步**：從供應商詳情頁刪除商品後，商品管理頁面的 SWR 快取會自動失效並重新驗證
+- **供應商管理頁面資料同步**：刪除供應商後，商品管理頁面的 SWR 快取會自動失效
+- **庫存驗證**：記錄瑕疵/銷售前檢查可用庫存，防止負庫存
+- **銷售單編輯庫存檢查**：編輯訂單時考慮已扣除的庫存數量
+- **顏色款式刪除約束**：修正 `color_variants` 外鍵約束為 `ON DELETE CASCADE`
+- **Storage 刪除權限**：新增 Storage bucket 的 delete policy，允許刪除圖片
+
+### 新增
+
+- 新增 `deleteProductImage()` 共用函數（`src/lib/image.ts`），統一處理圖片刪除邏輯
+
+### 資料遷移
+
+- 新增 migration 007：修正 `color_variants` 外鍵約束
+- 新增 migration 008：新增 Storage `product-images` bucket 的 delete policy
+
+**注意**：需在 Supabase SQL Editor 執行 `migrations/008_add_storage_delete_policy.sql` 以啟用圖片刪除功能
+
 ## [0.11.0] - 2026-09-12
 
 ### 架構改進

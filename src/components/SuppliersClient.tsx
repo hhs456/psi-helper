@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSWRConfig } from "swr";
 import { createClient } from "@/lib/supabase/browser";
+import { deleteProductImage } from "@/lib/image";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -77,6 +79,7 @@ function SupplierCard({
 
 export function SuppliersClient() {
   const { suppliers, isLoading, error, mutate } = useSuppliers();
+  const { mutate: globalMutate } = useSWRConfig();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
@@ -164,9 +167,21 @@ export function SuppliersClient() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("確定要刪除此供應商嗎？")) return;
+    if (!confirm("確定要刪除此供應商嗎？相關的商品也會一併刪除。")) return;
 
     const supabase = createClient();
+
+    const { data: productsData } = await supabase
+      .from("products")
+      .select("image_url")
+      .eq("supplier_id", id);
+
+    if (productsData) {
+      for (const p of productsData) {
+        await deleteProductImage(p.image_url);
+      }
+    }
+
     const { error } = await supabase.from("suppliers").delete().eq("id", id);
 
     if (error) {
@@ -174,6 +189,7 @@ export function SuppliersClient() {
       return;
     }
 
+    globalMutate((key) => Array.isArray(key) && key[0] === "products");
     await mutate();
   }
 

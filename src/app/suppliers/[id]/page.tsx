@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSWRConfig } from "swr";
 import { createClient } from "@/lib/supabase/browser";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -34,6 +35,7 @@ interface ProductWithVariants extends Product {
 export default function SupplierDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { mutate: globalMutate } = useSWRConfig();
   const supplierId = params.id as string;
 
   const [supplier, setSupplier] = useState<Supplier | null>(null);
@@ -45,7 +47,7 @@ export default function SupplierDetailPage() {
   const [productForm, setProductForm] = useState({ name: "", code: "", notes: "" });
   const [isProductEdit, setIsProductEdit] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl } = useImageUpload();
+  const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl, deleteImage } = useImageUpload();
 
   useEffect(() => {
     if (supplierId) {
@@ -121,6 +123,18 @@ export default function SupplierDetailPage() {
     if (!confirm("確定要刪除此供應商嗎？相關的商品也會一併刪除。")) return;
 
     const supabase = createClient();
+
+    const { data: productsData } = await supabase
+      .from("products")
+      .select("image_url")
+      .eq("supplier_id", supplierId);
+
+    if (productsData) {
+      for (const p of productsData) {
+        await deleteImage(p.image_url);
+      }
+    }
+
     const { error } = await supabase.from("suppliers").delete().eq("id", supplierId);
 
     if (error) {
@@ -128,6 +142,7 @@ export default function SupplierDetailPage() {
       return;
     }
 
+    globalMutate((key) => Array.isArray(key) && key[0] === "products");
     router.push("/suppliers");
   }
 
@@ -221,6 +236,11 @@ export default function SupplierDetailPage() {
   async function handleDeleteProduct(productId: string) {
     if (!confirm("確定要刪除此商品嗎？")) return;
 
+    const product = products.find((p) => p.id === productId);
+    if (product?.image_url) {
+      await deleteImage(product.image_url);
+    }
+
     const supabase = createClient();
     const { error } = await supabase.from("products").delete().eq("id", productId);
 
@@ -229,6 +249,7 @@ export default function SupplierDetailPage() {
       return;
     }
 
+    globalMutate((key) => Array.isArray(key) && key[0] === "products");
     fetchData();
   }
 
