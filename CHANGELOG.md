@@ -5,6 +5,22 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.19.0] - 2026-09-12
+
+### 改進
+
+- **庫存總覽**：Toggle 篩選改為「含缺貨品項」，顯示至少有一個 variant 庫存為 0 的商品（包含全部缺貨和部分缺貨）
+- **商品管理**：新增 Chip 篩選功能（全部、無庫存、部分缺貨、未上傳圖片、未新增品項），顯示各條件數量
+- **供應商**：新增排序下拉選單（商品數量、庫存、瑕疵率）和 Chip 篩選（全部、無商品、無庫存）
+- **供應商詳情**：新增顯示瑕疵率統計，與供應商卡片一致
+
+### 修改檔案
+
+- `src/components/HomeClient.tsx` - Toggle 篩選改為「含缺貨品項」
+- `src/components/ProductsClient.tsx` - 新增 Chip 篩選功能
+- `src/components/SuppliersClient.tsx` - 新增排序和篩選功能
+- `src/app/suppliers/[id]/page.tsx` - 新增瑕疵率顯示
+
 ## [0.18.0] - 2026-09-12
 
 ### 改進
