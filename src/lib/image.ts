@@ -1,3 +1,13 @@
+import { createClient } from "@/lib/supabase/browser";
+
+export async function deleteProductImage(imageUrl: string | null): Promise<void> {
+  if (!imageUrl) return;
+  const match = imageUrl.match(/\/storage\/v1\/object\/public\/product-images\/(.+)$/);
+  if (!match) return;
+  const supabase = createClient();
+  await supabase.storage.from("product-images").remove([match[1]]);
+}
+
 export async function compressImage(
   file: File,
   options: {

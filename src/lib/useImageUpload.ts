@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { compressImage } from "@/lib/image";
+import { compressImage, deleteProductImage } from "@/lib/image";
 
 export function useImageUpload() {
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -55,5 +55,9 @@ export function useImageUpload() {
     setImageFile(null);
   }
 
-  return { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl };
+  async function deleteImage(imageUrl: string | null): Promise<void> {
+    await deleteProductImage(imageUrl);
+  }
+
+  return { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl, deleteImage };
 }

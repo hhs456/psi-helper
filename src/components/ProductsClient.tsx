@@ -117,7 +117,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     notes: "",
   });
   const [searchQuery, setSearchQuery] = useState("");
-  const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl } = useImageUpload();
+  const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl, deleteImage } = useImageUpload();
 
   const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
     items: products,
@@ -218,6 +218,11 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
 
   async function handleDelete(id: string) {
     if (!confirm("確定要刪除此商品嗎？")) return;
+
+    const product = products.find((p) => p.id === id);
+    if (product?.image_url) {
+      await deleteImage(product.image_url);
+    }
 
     const supabase = createClient();
     const { error } = await supabase.from("products").delete().eq("id", id);
