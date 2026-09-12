@@ -31,8 +31,14 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
+          echo "--- Bash check ---"
           echo "NEXT_PUBLIC_SUPABASE_URL exists: $([ -n \"$NEXT_PUBLIC_SUPABASE_URL\" ] && echo 'yes' || echo 'no')"
           echo "SUPABASE_SERVICE_ROLE_KEY exists: $([ -n \"$SUPABASE_SERVICE_ROLE_KEY\" ] && echo 'yes' || echo 'no')"
+
+      - name: Debug Node.js env
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node -e "const v = process.env.SUPABASE_SERVICE_ROLE_KEY; console.log('Node.js check - SUPABASE_SERVICE_ROLE_KEY:', v ? 'set, length=' + v.length : 'not set')"
 
       - name: Run backup
         env:
