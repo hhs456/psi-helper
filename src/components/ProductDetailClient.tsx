@@ -23,6 +23,7 @@ import {
   Pin,
   PinOff,
   Loader2,
+  ClipboardList,
 } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -67,9 +68,13 @@ function VariantCard({
               <Pin size={14} className="text-gray-400" />
             )}
           </button>
-          <Button size="sm" variant="secondary" onClick={() => onLog(variant)}>
-            記錄
-          </Button>
+          <button
+            onClick={() => onLog(variant)}
+            className="p-1.5 rounded-lg hover:bg-green-50 transition-colors"
+            title="記錄庫存異動"
+          >
+            <ClipboardList size={14} className="text-green-600" />
+          </button>
           <button
             onClick={() => onEdit(variant)}
             className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"

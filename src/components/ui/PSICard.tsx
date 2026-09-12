@@ -34,7 +34,7 @@ export function PSICard({ product }: { product: PSICardData }) {
   );
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden w-full min-w-0">
       <div className="flex">
         <Link href={`/products/${product.id}`} className="w-20 h-20 flex-shrink-0 bg-gray-100 block relative">
           {product.image_url ? (
@@ -66,9 +66,9 @@ export function PSICard({ product }: { product: PSICardData }) {
         </div>
       </div>
 
-      <div className="border-t border-gray-100">
+      <div className="border-t border-gray-100 overflow-x-auto">
         {product.variants.length > 0 ? (
-          <table className="w-full text-xs table-fixed">
+          <table className="w-full text-xs">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-2 py-1.5 text-left text-gray-500 font-medium w-[35%] truncate">顏色/尺寸</th>

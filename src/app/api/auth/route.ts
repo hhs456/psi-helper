@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 export async function POST(request: NextRequest) {
   const { password } = await request.json();
-  const correctPassword = process.env.APP_PASSWORD || "psi2024";
+  const correctPassword = process.env.APP_PASSWORD;
 
   if (password === correctPassword) {
     const cookieStore = await cookies();

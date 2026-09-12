@@ -5,6 +5,35 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.17.2] - 2026-09-12
+
+### 新增
+
+- **頁腳元件**：新增版權頁腳，顯示 TinkerPump™ 版權和作者資訊
+  - 手機版：版權 + 作者
+  - 桌機版：版權 + 作者 + GitHub 連結
+- **記錄圖示**：商品詳情頁款式記錄按鈕改用 `BookOpen` 圖示
+
+### 修復
+
+- **進銷明細卡片寬度**：修復切換至進銷明細時商品卡無法自適應寬度的問題
+  - `PSICard` 外層加入 `w-full min-w-0` 確保在 grid 中正確收斂
+  - 表格容器加入 `overflow-x-auto`，移除 `table-fixed` 讓寬度自適應
+
+### 改進
+
+- **款式卡片尺寸**：縮小商品詳情頁品項卡片尺寸，減少版面佔用
+  - 數字從 `text-lg` 縮小為 `text-sm`
+  - padding 從 `p-4` 改為 `p-2`
+  - 按鈕和間距也一併縮小
+
+### 修改檔案
+
+- `src/components/Footer.tsx` - 新增頁腳元件
+- `src/app/layout.tsx` - 整合頁腳
+- `src/components/ui/PSICard.tsx` - 修復寬度問題
+- `src/components/ProductDetailClient.tsx` - 縮小款式卡片、更換記錄圖示
+
 ## [0.17.1] - 2026-09-12
 
 ### 修復
