@@ -22,11 +22,7 @@ export function useImageUpload() {
     const supabase = createClient();
     let fileToUpload: Blob = imageFile;
     try {
-      fileToUpload = await compressImage(imageFile, {
-        maxWidth: 1200,
-        maxHeight: 1200,
-        quality: 0.8,
-      });
+      fileToUpload = await compressImage(imageFile);
     } catch (err) {
       console.warn("Image compression failed, using original:", err);
     }

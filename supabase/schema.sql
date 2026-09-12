@@ -161,6 +161,7 @@ on conflict (id) do nothing;
 -- Drop existing storage policies
 drop policy if exists "Allow public read access to product images" on storage.objects;
 drop policy if exists "Allow authenticated users to upload product images" on storage.objects;
+drop policy if exists "Allow authenticated users to delete product images" on storage.objects;
 
 -- Allow public read access to product images
 create policy "Allow public read access to product images"
@@ -171,3 +172,8 @@ create policy "Allow public read access to product images"
 create policy "Allow authenticated users to upload product images"
   on storage.objects for insert
   with check (bucket_id = 'product-images');
+
+-- Allow authenticated users to delete product images
+create policy "Allow authenticated users to delete product images"
+  on storage.objects for delete
+  using (bucket_id = 'product-images');

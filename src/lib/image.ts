@@ -16,7 +16,7 @@ export async function compressImage(
     quality?: number;
   } = {}
 ): Promise<Blob> {
-  const { maxWidth = 600, maxHeight = 600, quality = 0.85 } = options;
+  const { maxWidth = 400, maxHeight = 400, quality = 0.7 } = options;
 
   return new Promise((resolve, reject) => {
     const img = new Image();
