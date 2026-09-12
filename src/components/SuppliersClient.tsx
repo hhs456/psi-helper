@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
 import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, Search, Loader2, Package } from "lucide-react";
-import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { DndContext, closestCorners, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSuppliers } from "@/lib/hooks";
 import type { SupplierWithStats } from "@/lib/hooks";
@@ -256,7 +256,7 @@ export function SuppliersClient() {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={closestCorners}
           onDragEnd={handleDragEnd}
         >
           <SortableContext

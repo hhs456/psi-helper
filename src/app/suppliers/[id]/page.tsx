@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { useImageUpload } from "@/lib/useImageUpload";
-import { DndContext, closestCenter } from "@dnd-kit/core";
+import { DndContext, closestCorners } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortableList } from "@/lib/useSortableList";
 import { usePin } from "@/lib/usePin";
@@ -395,7 +395,7 @@ export default function SupplierDetailPage() {
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={closestCorners}
             onDragEnd={handleDragEnd}
           >
             <SortableContext
