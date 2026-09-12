@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { useImageUpload } from "@/lib/useImageUpload";
 import { DndContext, closestCorners } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useSortableList } from "@/lib/useSortableList";
 import { usePin } from "@/lib/usePin";
 import {
@@ -400,7 +400,7 @@ export default function SupplierDetailPage() {
           >
             <SortableContext
               items={filteredProducts.map((p) => p.id)}
-              strategy={verticalListSortingStrategy}
+              strategy={rectSortingStrategy}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredProducts.map((product) => {

@@ -5,6 +5,22 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.18.0] - 2026-09-12
+
+### 改進
+
+- **庫存總覽**：移除排序選項「無庫存」（已有篩選功能）
+- **庫存總覽**：新增 Toggle 篩選「僅顯示部分品項無庫存」，顯示至少有一個 variant 庫存為 0 的商品
+- **拖曳排序**：所有網格佈局頁面改用 `rectSortingStrategy`，修正寬螢幕多行拖曳顯示異常
+
+### 修改檔案
+
+- `src/components/HomeClient.tsx` - 移除排序選項、新增 Toggle 篩選
+- `src/components/ProductsClient.tsx` - 改用 rectSortingStrategy
+- `src/components/SuppliersClient.tsx` - 改用 rectSortingStrategy
+- `src/components/ProductDetailClient.tsx` - 改用 rectSortingStrategy
+- `src/app/suppliers/[id]/page.tsx` - 改用 rectSortingStrategy
+
 ## [0.17.0] - 2026-09-12
 
 ### 改進
