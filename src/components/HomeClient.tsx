@@ -13,7 +13,7 @@ export function HomeClient() {
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [minStock, setMinStock] = useState("");
   const [maxStock, setMaxStock] = useState("");
-  const [showPartialOutOfStock, setShowPartialOutOfStock] = useState(false);
+  const [showOutOfStockVariants, setShowOutOfStockVariants] = useState(false);
 
   const getStock = (item: typeof inventory[0]) =>
     item.variants.reduce((sum, v) => sum + v.available, 0);
@@ -22,7 +22,17 @@ export function HomeClient() {
     const total = inventory.length;
     const inStock = inventory.filter((item) => getStock(item) > 0).length;
     const outOfStock = total - inStock;
-    return { total, inStock, outOfStock };
+    let hasOutOfStockVariant = 0;
+
+    inventory.forEach((item) => {
+      if (item.variants.length === 0) return;
+      const someOutOfStock = item.variants.some((v) => v.available <= 0);
+      if (someOutOfStock) {
+        hasOutOfStockVariant++;
+      }
+    });
+
+    return { total, inStock, outOfStock, hasOutOfStockVariant };
   }, [inventory]);
 
   const filteredInventory = useMemo(() => {
@@ -38,9 +48,10 @@ export function HomeClient() {
       if (minStock !== "" && stock < Number(minStock)) return false;
       if (maxStock !== "" && stock > Number(maxStock)) return false;
 
-      if (showPartialOutOfStock) {
-        const hasOutOfStockVariant = item.variants.some((v) => v.available === 0);
-        if (!hasOutOfStockVariant) return false;
+      if (showOutOfStockVariants) {
+        if (item.variants.length === 0) return false;
+        const someOutOfStock = item.variants.some((v) => v.available <= 0);
+        if (!someOutOfStock) return false;
       }
 
       return true;
@@ -61,7 +72,7 @@ export function HomeClient() {
         break;
     }
     return result;
-  }, [inventory, searchQuery, sortBy, minStock, maxStock, showPartialOutOfStock]);
+  }, [inventory, searchQuery, sortBy, minStock, maxStock, showOutOfStockVariants]);
 
   const setQuickFilter = (filter: string) => {
     switch (filter) {
@@ -234,18 +245,18 @@ export function HomeClient() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowPartialOutOfStock(!showPartialOutOfStock)}
+            onClick={() => setShowOutOfStockVariants(!showOutOfStockVariants)}
             className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
-              showPartialOutOfStock ? "bg-orange-500" : "bg-gray-200"
+              showOutOfStockVariants ? "bg-orange-500" : "bg-gray-200"
             }`}
           >
             <span
               className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                showPartialOutOfStock ? "translate-x-4" : "translate-x-0"
+                showOutOfStockVariants ? "translate-x-4" : "translate-x-0"
               }`}
             />
           </button>
-          <span className="text-sm text-gray-600">僅顯示部分品項無庫存</span>
+          <span className="text-sm text-gray-600">含缺貨品項 ({stats.hasOutOfStockVariant})</span>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useSWRConfig } from "swr";
 import { createClient } from "@/lib/supabase/browser";
@@ -9,13 +9,24 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
-import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, Search, Loader2, Package } from "lucide-react";
+import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, Search, Loader2, Package, ArrowUpDown } from "lucide-react";
 import { DndContext, closestCorners, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useSuppliers } from "@/lib/hooks";
 import type { SupplierWithStats } from "@/lib/hooks";
 import { useSortableList } from "@/lib/useSortableList";
 import { usePin } from "@/lib/usePin";
+
+type SupplierSortOption =
+  | "default"
+  | "products-desc"
+  | "products-asc"
+  | "stock-desc"
+  | "stock-asc"
+  | "defect-desc"
+  | "defect-asc";
+
+type SupplierFilter = "all" | "no-products" | "no-stock";
 
 function SupplierCard({
   supplier,
@@ -109,6 +120,58 @@ export function SuppliersClient() {
   const [editingSupplier, setEditingSupplier] = useState<SupplierWithStats | null>(null);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SupplierSortOption>("default");
+  const [supplierFilter, setSupplierFilter] = useState<SupplierFilter>("all");
+
+  const filterStats = useMemo(() => {
+    return {
+      noProducts: suppliers.filter((s) => s.product_count === 0).length,
+      noStock: suppliers.filter((s) => s.total_stock <= 0).length,
+    };
+  }, [suppliers]);
+
+  const getDefectRate = (s: SupplierWithStats) =>
+    s.total_purchased > 0 ? (s.total_defective / s.total_purchased) * 100 : 0;
+
+  const filteredSuppliers = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+
+    let pinned = suppliers.filter((s) => s.is_pinned && s.name.toLowerCase().includes(query));
+    let unpinned = suppliers.filter((s) => !s.is_pinned && s.name.toLowerCase().includes(query));
+
+    if (supplierFilter === "no-products") {
+      pinned = pinned.filter((s) => s.product_count === 0);
+      unpinned = unpinned.filter((s) => s.product_count === 0);
+    } else if (supplierFilter === "no-stock") {
+      pinned = pinned.filter((s) => s.total_stock <= 0);
+      unpinned = unpinned.filter((s) => s.total_stock <= 0);
+    }
+
+    pinned.sort((a, b) => b.sort_order - a.sort_order);
+
+    switch (sortBy) {
+      case "products-desc":
+        unpinned.sort((a, b) => b.product_count - a.product_count);
+        break;
+      case "products-asc":
+        unpinned.sort((a, b) => a.product_count - b.product_count);
+        break;
+      case "stock-desc":
+        unpinned.sort((a, b) => b.total_stock - a.total_stock);
+        break;
+      case "stock-asc":
+        unpinned.sort((a, b) => a.total_stock - b.total_stock);
+        break;
+      case "defect-desc":
+        unpinned.sort((a, b) => getDefectRate(b) - getDefectRate(a));
+        break;
+      case "defect-asc":
+        unpinned.sort((a, b) => getDefectRate(a) - getDefectRate(b));
+        break;
+    }
+
+    return [...pinned, ...unpinned];
+  }, [suppliers, searchQuery, sortBy, supplierFilter]);
 
   const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
     items: suppliers,
@@ -218,11 +281,6 @@ export function SuppliersClient() {
     await mutate();
   }
 
-  const filteredSuppliers = suppliers.filter((supplier) => {
-    const query = searchQuery.toLowerCase();
-    return supplier.name.toLowerCase().includes(query);
-  });
-
   return (
     <>
       <div className="flex items-center justify-between mb-6">
@@ -242,6 +300,58 @@ export function SuppliersClient() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           />
+        </div>
+      </div>
+
+      <div className="mb-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <ArrowUpDown size={16} className="text-gray-500" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SupplierSortOption)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            <option value="default">預設排序</option>
+            <option value="products-desc">商品數量：多 → 少</option>
+            <option value="products-asc">商品數量：少 → 多</option>
+            <option value="stock-desc">庫存：高 → 低</option>
+            <option value="stock-asc">庫存：低 → 高</option>
+            <option value="defect-desc">瑕疵率：高 → 低</option>
+            <option value="defect-asc">瑕疵率：低 → 高</option>
+          </select>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSupplierFilter("all")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              supplierFilter === "all"
+                ? "bg-orange-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            全部
+          </button>
+          <button
+            onClick={() => setSupplierFilter("no-products")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              supplierFilter === "no-products"
+                ? "bg-purple-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            無商品 ({filterStats.noProducts})
+          </button>
+          <button
+            onClick={() => setSupplierFilter("no-stock")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              supplierFilter === "no-stock"
+                ? "bg-red-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            無庫存 ({filterStats.noStock})
+          </button>
         </div>
       </div>
 

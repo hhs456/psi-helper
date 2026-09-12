@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
@@ -29,6 +29,8 @@ type ProductWithSupplier = Omit<Product, "supplier"> & {
   }[];
 };
 
+type ProductFilter = "all" | "no-stock" | "partial" | "no-image" | "no-variants";
+
 export function ProductsClient({ pageSize }: { pageSize: number }) {
   const searchParams = useSearchParams();
   const currentPage = parseInt(searchParams.get("page") || "1");
@@ -42,6 +44,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     notes: "",
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [productFilter, setProductFilter] = useState<ProductFilter>("all");
   const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl, deleteImage } = useImageUpload();
 
   const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
@@ -60,6 +63,59 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
   async function handleDragEnd(event: DragEndEvent) {
     await handleSortableDragEnd(event);
   }
+
+  const filterStats = useMemo(() => {
+    let noStock = 0;
+    let partial = 0;
+    let noImage = 0;
+    let noVariants = 0;
+
+    products.forEach((product) => {
+      if (!product.image_url) noImage++;
+      if (!product.variants || product.variants.length === 0) {
+        noVariants++;
+        return;
+      }
+      const availables = product.variants.map((v) => v.purchased - v.defective - v.sold);
+      const allOutOfStock = availables.every((a) => a <= 0);
+      const someOutOfStock = availables.some((a) => a <= 0);
+      const someInStock = availables.some((a) => a > 0);
+
+      if (allOutOfStock) {
+        noStock++;
+      } else if (someOutOfStock && someInStock) {
+        partial++;
+      }
+    });
+
+    return { noStock, partial, noImage, noVariants };
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        product.name.toLowerCase().includes(query) ||
+        (product.code && product.code.toLowerCase().includes(query));
+      if (!matchesSearch) return false;
+
+      if (productFilter === "no-stock") {
+        if (!product.variants || product.variants.length === 0) return false;
+        return product.variants.every((v) => v.purchased - v.defective - v.sold <= 0);
+      } else if (productFilter === "partial") {
+        if (!product.variants || product.variants.length === 0) return false;
+        const someOutOfStock = product.variants.some((v) => v.purchased - v.defective - v.sold <= 0);
+        const someInStock = product.variants.some((v) => v.purchased - v.defective - v.sold > 0);
+        return someOutOfStock && someInStock;
+      } else if (productFilter === "no-image") {
+        return !product.image_url;
+      } else if (productFilter === "no-variants") {
+        return !product.variants || product.variants.length === 0;
+      }
+
+      return true;
+    });
+  }, [products, searchQuery, productFilter]);
 
   if (isLoading) {
     return (
@@ -160,14 +216,6 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     await mutate();
   }
 
-  const filteredProducts = products.filter((product) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      product.name.toLowerCase().includes(query) ||
-      (product.code && product.code.toLowerCase().includes(query))
-    );
-  });
-
   return (
     <>
       <div className="flex items-center justify-between mb-6">
@@ -187,6 +235,61 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           />
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setProductFilter("all")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              productFilter === "all"
+                ? "bg-orange-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            全部
+          </button>
+          <button
+            onClick={() => setProductFilter("no-stock")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              productFilter === "no-stock"
+                ? "bg-red-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            無庫存 ({filterStats.noStock})
+          </button>
+          <button
+            onClick={() => setProductFilter("partial")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              productFilter === "partial"
+                ? "bg-yellow-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            部分缺貨 ({filterStats.partial})
+          </button>
+          <button
+            onClick={() => setProductFilter("no-image")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              productFilter === "no-image"
+                ? "bg-purple-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            未上傳圖片 ({filterStats.noImage})
+          </button>
+          <button
+            onClick={() => setProductFilter("no-variants")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              productFilter === "no-variants"
+                ? "bg-blue-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            未新增品項 ({filterStats.noVariants})
+          </button>
         </div>
       </div>
 

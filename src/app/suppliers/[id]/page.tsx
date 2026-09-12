@@ -300,6 +300,18 @@ export default function SupplierDetailPage() {
       )
     );
   }, 0);
+  const totalPurchased = products.reduce((sum, p) => {
+    return sum + (p.variants || []).reduce((vSum, v) => vSum + v.purchased, 0);
+  }, 0);
+  const totalDefective = products.reduce((sum, p) => {
+    return sum + (p.variants || []).reduce((vSum, v) => vSum + v.defective, 0);
+  }, 0);
+  const defectRate = totalPurchased > 0 ? (totalDefective / totalPurchased) * 100 : 0;
+  const defectRateColor = defectRate > 10
+    ? "text-red-600"
+    : defectRate > 5
+    ? "text-yellow-600"
+    : "text-green-600";
 
   if (loading) {
     return (
@@ -346,6 +358,10 @@ export default function SupplierDetailPage() {
               <div className="text-center">
                 <p className="text-2xl font-bold text-green-600">{totalStock}</p>
                 <p className="text-xs text-gray-500">總庫存</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-2xl font-bold ${defectRateColor}`}>{defectRate.toFixed(1)}%</p>
+                <p className="text-xs text-gray-500">瑕疵率</p>
               </div>
             </div>
           </div>
