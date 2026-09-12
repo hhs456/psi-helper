@@ -91,6 +91,8 @@ export function useInventory() {
 export interface SupplierWithStats extends Supplier {
   product_count: number;
   total_stock: number;
+  total_purchased: number;
+  total_defective: number;
 }
 
 export function useSuppliers() {
@@ -120,9 +122,13 @@ export function useSuppliers() {
       const products = s.products || [];
       const productCount = products.length;
       let totalStock = 0;
+      let totalPurchased = 0;
+      let totalDefective = 0;
       for (const p of products) {
         const variants = p.variants || [];
         for (const v of variants) {
+          totalPurchased += v.purchased;
+          totalDefective += v.defective;
           totalStock += v.purchased - v.defective - v.sold;
         }
       }
@@ -137,6 +143,8 @@ export function useSuppliers() {
         updated_at: s.updated_at,
         product_count: productCount,
         total_stock: totalStock,
+        total_purchased: totalPurchased,
+        total_defective: totalDefective,
       };
     });
 

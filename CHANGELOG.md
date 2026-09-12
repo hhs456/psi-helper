@@ -5,6 +5,31 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.15.0] - 2026-09-12
+
+### 新增
+
+- **進銷明細頁面** (`/psi`)：新增頁面顯示每個商品規格的進貨、瑕疵、銷售數量
+  - 使用獨立的 `PSICard` 元件，避免在現有 `ProductCard` 累積技術債
+  - 表格顯示各規格明細與合計
+  - 支援依商品名稱、編號或供應商搜尋
+- **供應商瑕疵率**：供應商卡片新增瑕疵率顯示，並以顏色區分
+  - 綠色：< 5%
+  - 黃色：5-10%
+  - 紅色：> 10%
+
+### 新增檔案
+
+- `src/app/psi/page.tsx` - 進銷明細頁面
+- `src/components/PSIClient.tsx` - 進銷明細客戶端元件
+- `src/components/ui/PSICard.tsx` - 進銷明細卡片元件
+
+### 修改檔案
+
+- `src/components/Sidebar.tsx` - 新增「進銷明細」導覽項目
+- `src/components/SuppliersClient.tsx` - 供應商卡片顯示瑕疵率
+- `src/lib/hooks.ts` - `SupplierWithStats` 新增 `total_purchased` 和 `total_defective` 欄位
+
 ## [0.14.0] - 2026-09-12
 
 ### 新增

@@ -28,6 +28,15 @@ function SupplierCard({
   onEdit: (supplier: SupplierWithStats) => void;
   onDelete: (id: string) => void;
 }) {
+  const defectRate = supplier.total_purchased > 0
+    ? (supplier.total_defective / supplier.total_purchased) * 100
+    : 0;
+  const defectRateColor = defectRate > 10
+    ? "text-red-600"
+    : defectRate > 5
+    ? "text-yellow-600"
+    : "text-green-600";
+
   return (
     <SortableCard id={supplier.id} isPinned={supplier.is_pinned} className="p-4">
       <div className="flex items-start justify-between">
@@ -53,6 +62,11 @@ function SupplierCard({
               <div className="text-sm">
                 <span className={supplier.total_stock > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
                   庫存：{supplier.total_stock}
+                </span>
+              </div>
+              <div className="text-sm">
+                <span className={`font-medium ${defectRateColor}`}>
+                  瑕疵率：{defectRate.toFixed(1)}%
                 </span>
               </div>
             </div>
