@@ -335,8 +335,6 @@ export function usePSI(page: number = 1, pageSize: number = 20, filters: PSIFilt
 
   const fetcher = async () => {
     const supabase = createClient();
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
 
     let query = supabase
       .from("products")
@@ -358,11 +356,7 @@ export function usePSI(page: number = 1, pageSize: number = 20, filters: PSIFilt
       `);
 
     if (searchQuery) {
-      query = query.or(`name.ilike.%${searchQuery}%,code.ilike.%${searchQuery}%,supplier.name.ilike.%${searchQuery}%`);
-    }
-
-    if (supplierName) {
-      query = query.eq("supplier.name", supplierName);
+      query = query.or(`name.ilike.%${searchQuery}%,code.ilike.%${searchQuery}%`);
     }
 
     switch (sortBy) {
@@ -380,37 +374,20 @@ export function usePSI(page: number = 1, pageSize: number = 20, filters: PSIFilt
           .order("created_at", { ascending: true });
     }
 
-    const [productsRes, countRes] = await Promise.all([
-      query.range(from, to),
-      searchQuery || supplierName
-        ? supabase.from("products").select("id", { count: "exact", head: true }).then((res) => {
-            let countQuery = supabase.from("products").select("id", { count: "exact", head: true });
-            if (searchQuery) {
-              countQuery = countQuery.or(`name.ilike.%${searchQuery}%,code.ilike.%${searchQuery}%,supplier.name.ilike.%${searchQuery}%`);
-            }
-            if (supplierName) {
-              countQuery = countQuery.eq("supplier.name", supplierName);
-            }
-            return countQuery;
-          })
-        : supabase.from("products").select("id", { count: "exact", head: true }),
-    ]);
+    const { data: productsData, error: productsError } = await query;
 
-    if (productsRes.error) throw productsRes.error;
-
-    const totalProducts = countRes.count || 0;
-    const totalPages = Math.ceil(totalProducts / pageSize);
+    if (productsError) throw productsError;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let items: PSIItem[] = (productsRes.data || []).map((p: any) => {
-      const supplierName = Array.isArray(p.supplier)
+    let items: PSIItem[] = (productsData || []).map((p: any) => {
+      const sName = Array.isArray(p.supplier)
         ? p.supplier[0]?.name || "未設定"
         : p.supplier?.name || "未設定";
       return {
         product_id: p.id,
         product_name: p.name,
         product_code: p.code,
-        supplier_name: supplierName,
+        supplier_name: sName,
         image_url: p.image_url,
         variants: (p.variants || []).map((v: { color: string; size: string | null; purchased: number; defective: number; sold: number }) => ({
           color: v.color,
@@ -422,6 +399,16 @@ export function usePSI(page: number = 1, pageSize: number = 20, filters: PSIFilt
         })),
       };
     });
+
+    if (supplierName) {
+      items = items.filter((item) => item.supplier_name === supplierName);
+    }
+
+    const totalProducts = items.length;
+    const totalPages = Math.ceil(totalProducts / pageSize);
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    items = items.slice(from, to);
 
     const getTotal = (item: PSIItem, field: "purchased" | "defective" | "sold" | "available") =>
       item.variants.reduce((sum, v) => sum + v[field], 0);
