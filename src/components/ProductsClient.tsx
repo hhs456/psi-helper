@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
+import { ProductCard } from "@/components/ui/ProductCard";
 import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, Search, Loader2 } from "lucide-react";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -21,88 +20,14 @@ import type { Product, Supplier } from "@/types";
 
 type ProductWithSupplier = Omit<Product, "supplier"> & {
   supplier: Supplier | null;
+  variants?: {
+    color: string;
+    size: string | null;
+    purchased: number;
+    defective: number;
+    sold: number;
+  }[];
 };
-
-function ProductCard({
-  product,
-  onPin,
-  onEdit,
-  onDelete,
-}: {
-  product: ProductWithSupplier;
-  onPin: (id: string, isPinned: boolean) => void;
-  onEdit: (product: ProductWithSupplier) => void;
-  onDelete: (id: string) => void;
-}) {
-  return (
-    <SortableCard id={product.id} isPinned={product.is_pinned}>
-      <div className="flex">
-        <div className="w-8 flex-shrink-0 flex items-center justify-center bg-gray-50 hover:bg-gray-100">
-          <DragHandle />
-        </div>
-        <Link href={`/products/${product.id}`} className="w-20 h-20 flex-shrink-0 bg-gray-100 block relative">
-          {product.image_url ? (
-            <Image
-              src={product.image_url}
-              alt={product.name}
-              fill
-              className="object-cover"
-              sizes="80px"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <Package className="text-gray-400" size={24} />
-            </div>
-          )}
-        </Link>
-        <div className="flex-1 p-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <Link href={`/products/${product.id}`}>
-                <h3 className="font-semibold text-gray-900 text-sm hover:text-blue-600 transition-colors">
-                  {product.name}
-                </h3>
-              </Link>
-              {product.code && (
-                <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
-              )}
-              {product.supplier?.name && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {product.supplier.name}
-                </p>
-              )}
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => onPin(product.id, product.is_pinned)}
-                className="p-1 rounded hover:bg-gray-100"
-                title={product.is_pinned ? "取消釘選" : "釘選"}
-              >
-                {product.is_pinned ? (
-                  <PinOff size={14} className="text-orange-500" />
-                ) : (
-                  <Pin size={14} className="text-gray-400" />
-                )}
-              </button>
-              <button
-                onClick={() => onEdit(product)}
-                className="p-1 rounded hover:bg-gray-100"
-              >
-                <Edit2 size={14} className="text-gray-600" />
-              </button>
-              <button
-                onClick={() => onDelete(product.id)}
-                className="p-1 rounded hover:bg-red-50"
-              >
-                <Trash2 size={14} className="text-red-500" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </SortableCard>
-  );
-}
 
 export function ProductsClient({ pageSize }: { pageSize: number }) {
   const searchParams = useSearchParams();
@@ -287,10 +212,45 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
               {filteredProducts.map((product) => (
                 <ProductCard
                   key={product.id}
-                  product={product}
-                  onPin={handlePin}
-                  onEdit={openModal}
-                  onDelete={handleDelete}
+                  product={{
+                    ...product,
+                    supplier_name: product.supplier?.name,
+                    variants: product.variants?.map((v) => ({
+                      color: v.color,
+                      size: v.size,
+                      available: v.purchased - v.defective - v.sold,
+                    })),
+                  }}
+                  isSortable
+                  showVariants
+                  showSupplier
+                  actions={
+                    <>
+                      <button
+                        onClick={() => handlePin(product.id, product.is_pinned)}
+                        className="p-1 rounded hover:bg-gray-100"
+                        title={product.is_pinned ? "取消釘選" : "釘選"}
+                      >
+                        {product.is_pinned ? (
+                          <PinOff size={14} className="text-orange-500" />
+                        ) : (
+                          <Pin size={14} className="text-gray-400" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => openModal(product)}
+                        className="p-1 rounded hover:bg-gray-100"
+                      >
+                        <Edit2 size={14} className="text-gray-600" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="p-1 rounded hover:bg-red-50"
+                      >
+                        <Trash2 size={14} className="text-red-500" />
+                      </button>
+                    </>
+                  }
                 />
               ))}
             </div>

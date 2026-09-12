@@ -5,6 +5,40 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.14.0] - 2026-09-12
+
+### 新增
+
+- **共用 ProductCard 元件**：統一三個頁面的商品卡顯示，減少重複程式碼
+- **庫存總覽強化**：
+  - 統計摘要列：顯示總品項、有庫存、缺貨數量
+  - 庫存排序：支援庫存低→高、高→低、缺貨優先、品項數量排序
+  - 庫存篩選：可設定庫存上下限
+  - 快速鍵按鈕：全部/缺貨(0)/低庫存(1-5)/正常(6-50)/充足(51+)
+- **供應商頁面強化**：
+  - 供應商卡顯示商品數量和庫存總數
+  - 供應商詳情頁新增搜尋列
+  - 供應商詳情頁商品卡支援釘選和拖曳排序
+
+### 改進
+
+- **庫存總覽**：現在顯示顏色/尺寸庫存標籤（與商品管理頁一致）
+- **商品管理頁**：現在顯示顏色/尺寸庫存標籤
+- **供應商詳情頁**：商品卡現在顯示顏色/尺寸庫存標籤
+- **useSuppliers hook**：擴充查詢以包含商品數量和庫存總數統計
+
+### 新增檔案
+
+- `src/components/ui/ProductCard.tsx` - 共用商品卡元件
+
+### 修改檔案
+
+- `src/components/HomeClient.tsx` - 庫存總覽強化
+- `src/components/ProductsClient.tsx` - 使用共用 ProductCard
+- `src/components/SuppliersClient.tsx` - 供應商卡顯示統計
+- `src/app/suppliers/[id]/page.tsx` - 搜尋 + 釘選排序
+- `src/lib/hooks.ts` - useProducts 加入 variants，useSuppliers 加入統計
+
 ## [0.13.0] - 2026-09-12
 
 ### 新增
