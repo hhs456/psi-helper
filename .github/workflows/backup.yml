@@ -35,9 +35,15 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL exists: $([ -n \"$NEXT_PUBLIC_SUPABASE_URL\" ] && echo 'yes' || echo 'no')"
           echo "SUPABASE_SERVICE_ROLE_KEY exists: $([ -n \"$SUPABASE_SERVICE_ROLE_KEY\" ] && echo 'yes' || echo 'no')"
 
-      - name: Debug Node.js env
+      - name: Debug env vars (all SUPABASE)
+        run: env | grep -i SUPABASE || echo "No SUPABASE env vars found"
+
+      - name: Debug Node.js env (all keys)
+        run: node -e "console.log('SUPABASE keys:', JSON.stringify(Object.keys(process.env).filter(k => k.toUpperCase().includes('SUPABASE'))))"
+
+      - name: Debug Node.js with explicit env
         run: |
-          node -e "const v = process.env.SUPABASE_SERVICE_ROLE_KEY; console.log('Node.js check - SUPABASE_SERVICE_ROLE_KEY:', v ? 'set, length=' + v.length : 'not set')"
+          SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" node -e "console.log('Explicit - SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set, len=' + process.env.SUPABASE_SERVICE_ROLE_KEY.length : 'not set')"
 
       - name: Run backup
         run: npx tsx scripts/backup-db.ts
