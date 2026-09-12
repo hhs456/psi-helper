@@ -266,3 +266,95 @@ export function useProducts(page: number = 1, pageSize: number = 20) {
     mutate,
   };
 }
+
+export interface PSIItem {
+  product_id: string;
+  product_name: string;
+  product_code: string | null;
+  supplier_name: string;
+  image_url: string | null;
+  variants: {
+    color: string;
+    size: string | null;
+    purchased: number;
+    defective: number;
+    sold: number;
+    available: number;
+  }[];
+}
+
+export function usePSI(page: number = 1, pageSize: number = 20) {
+  const fetcher = async () => {
+    const supabase = createClient();
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const [productsRes, countRes] = await Promise.all([
+      supabase
+        .from("products")
+        .select(`
+          id,
+          name,
+          code,
+          image_url,
+          supplier:supplier_id (
+            name
+          ),
+          variants:color_variants (
+            color,
+            size,
+            purchased,
+            defective,
+            sold
+          )
+        `)
+        .order("is_pinned", { ascending: false })
+        .order("sort_order", { ascending: false })
+        .order("created_at", { ascending: true })
+        .range(from, to),
+      supabase.from("products").select("id", { count: "exact", head: true }),
+    ]);
+
+    if (productsRes.error) throw productsRes.error;
+
+    const totalProducts = countRes.count || 0;
+    const totalPages = Math.ceil(totalProducts / pageSize);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items: PSIItem[] = (productsRes.data || []).map((p: any) => {
+      const supplierName = Array.isArray(p.supplier)
+        ? p.supplier[0]?.name || "未設定"
+        : p.supplier?.name || "未設定";
+      return {
+        product_id: p.id,
+        product_name: p.name,
+        product_code: p.code,
+        supplier_name: supplierName,
+        image_url: p.image_url,
+        variants: (p.variants || []).map((v: { color: string; size: string | null; purchased: number; defective: number; sold: number }) => ({
+          color: v.color,
+          size: v.size,
+          purchased: v.purchased,
+          defective: v.defective,
+          sold: v.sold,
+          available: v.purchased - v.defective - v.sold,
+        })),
+      };
+    });
+
+    return {
+      items,
+      totalPages,
+    };
+  };
+
+  const { data, error, isLoading, mutate } = useSWR(["psi", page, pageSize], fetcher, swrOptions);
+
+  return {
+    items: data?.items || [],
+    totalPages: data?.totalPages || 1,
+    isLoading,
+    error,
+    mutate,
+  };
+}

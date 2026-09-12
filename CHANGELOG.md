@@ -5,6 +5,34 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.16.0] - 2026-09-12
+
+### 新增
+
+- **進銷明細頁面**：新增分頁功能和排序功能
+  - 支援依進貨/銷售/庫存數量排序（多→少、少→多）
+  - 使用新的 `usePSI` hook 實作伺服器端分頁
+- **庫存總覽**：新增「品項：少 → 多」排序選項
+
+### 改進
+
+- **供應商詳情頁**：改用共用的 `useSortableList` 和 `usePin` hooks，支援樂觀更新
+- **庫存總覽**：快速篩選按鈕改為「無庫存 (0)」、「1-5」、「6-10」、「11+」
+- **庫存總覽**：排序選項文字調整
+  - 「缺貨優先」改為「無庫存」
+  - 「品項數量：多 → 少」簡化為「品項：多 → 少」
+
+### 新增檔案
+
+- `src/lib/hooks.ts` - 新增 `usePSI` hook 和 `PSIItem` 型別
+
+### 修改檔案
+
+- `src/app/suppliers/[id]/page.tsx` - 使用共用 hooks 實作樂觀更新
+- `src/app/psi/page.tsx` - 新增分頁支援
+- `src/components/PSIClient.tsx` - 新增排序和分頁功能
+- `src/components/HomeClient.tsx` - 更新篩選和排序選項
+
 ## [0.15.0] - 2026-09-12
 
 ### 新增

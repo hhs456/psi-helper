@@ -10,8 +10,10 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { useImageUpload } from "@/lib/useImageUpload";
-import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { DndContext, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useSortableList } from "@/lib/useSortableList";
+import { usePin } from "@/lib/usePin";
 import {
   ArrowLeft,
   Edit2,
@@ -61,6 +63,19 @@ export default function SupplierDetailPage() {
     }
   }, [supplierId]);
 
+  const { sensors, handleDragEnd } = useSortableList({
+    items: products,
+    tableName: "products",
+    onReorder: (newProducts) => setProducts(newProducts),
+    revalidate: fetchData,
+  });
+
+  const { handlePin } = usePin({
+    items: products,
+    tableName: "products",
+    onUpdate: (updatedProducts) => setProducts(updatedProducts),
+  });
+
   async function fetchData() {
     try {
       const supabase = createClient();
@@ -96,53 +111,6 @@ export default function SupplierDetailPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handlePin(productId: string, isPinned: boolean) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("products")
-      .update({ is_pinned: !isPinned })
-      .eq("id", productId);
-
-    if (error) {
-      alert("釘選失敗：" + error.message);
-      return;
-    }
-
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, is_pinned: !isPinned } : p))
-    );
-    globalMutate((key) => Array.isArray(key) && key[0] === "products");
-  }
-
-  async function handleSort(newProducts: ProductWithVariants[]) {
-    const supabase = createClient();
-    const updates = newProducts.map((p, index) => ({
-      id: p.id,
-      sort_order: newProducts.length - index,
-    }));
-
-    for (const update of updates) {
-      await supabase.from("products").update({ sort_order: update.sort_order }).eq("id", update.id);
-    }
-
-    setProducts(newProducts);
-    globalMutate((key) => Array.isArray(key) && key[0] === "products");
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = products.findIndex((p) => p.id === active.id);
-    const newIndex = products.findIndex((p) => p.id === over.id);
-
-    const newProducts = [...products];
-    const [movedProduct] = newProducts.splice(oldIndex, 1);
-    newProducts.splice(newIndex, 0, movedProduct);
-
-    await handleSort(newProducts);
   }
 
   function openEditModal() {
@@ -426,6 +394,7 @@ export default function SupplierDetailPage() {
           </Card>
         ) : (
           <DndContext
+            sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >

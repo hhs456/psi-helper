@@ -5,7 +5,7 @@ import { ProductCard } from "@/components/ui/ProductCard";
 import { Package, Search, Loader2, ArrowUpDown } from "lucide-react";
 import { useInventory } from "@/lib/hooks";
 
-type SortOption = "default" | "stock-asc" | "stock-desc" | "out-of-stock" | "variants-desc";
+type SortOption = "default" | "stock-asc" | "stock-desc" | "out-of-stock" | "variants-desc" | "variants-asc";
 
 export function HomeClient() {
   const { inventory, isLoading, error } = useInventory();
@@ -25,7 +25,7 @@ export function HomeClient() {
   }, [inventory]);
 
   const filteredInventory = useMemo(() => {
-    let result = inventory.filter((item) => {
+    const result = inventory.filter((item) => {
       const query = searchQuery.toLowerCase();
       const matchesSearch =
         item.product_name.toLowerCase().includes(query) ||
@@ -58,6 +58,9 @@ export function HomeClient() {
       case "variants-desc":
         result.sort((a, b) => b.variants.length - a.variants.length);
         break;
+      case "variants-asc":
+        result.sort((a, b) => a.variants.length - b.variants.length);
+        break;
     }
     return result;
   }, [inventory, searchQuery, sortBy, minStock, maxStock]);
@@ -78,10 +81,10 @@ export function HomeClient() {
         break;
       case "normal":
         setMinStock("6");
-        setMaxStock("50");
+        setMaxStock("10");
         break;
       case "high-stock":
-        setMinStock("51");
+        setMinStock("11");
         setMaxStock("");
         break;
     }
@@ -152,8 +155,9 @@ export function HomeClient() {
             <option value="default">預設排序</option>
             <option value="stock-asc">庫存：低 → 高</option>
             <option value="stock-desc">庫存：高 → 低</option>
-            <option value="out-of-stock">缺貨優先</option>
-            <option value="variants-desc">品項數量：多 → 少</option>
+            <option value="out-of-stock">無庫存</option>
+            <option value="variants-desc">品項：多 → 少</option>
+            <option value="variants-asc">品項：少 → 多</option>
           </select>
         </div>
 
@@ -197,7 +201,7 @@ export function HomeClient() {
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            缺貨 (0)
+            無庫存 (0)
           </button>
           <button
             onClick={() => setQuickFilter("low-stock")}
@@ -207,27 +211,27 @@ export function HomeClient() {
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            低庫存 (1-5)
+            1-5
           </button>
           <button
             onClick={() => setQuickFilter("normal")}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              minStock === "6" && maxStock === "50"
+              minStock === "6" && maxStock === "10"
                 ? "bg-green-500 text-white"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            正常 (6-50)
+            6-10
           </button>
           <button
             onClick={() => setQuickFilter("high-stock")}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              minStock === "51" && maxStock === ""
+              minStock === "11" && maxStock === ""
                 ? "bg-blue-500 text-white"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            充足 (51+)
+            11+
           </button>
         </div>
       </div>
