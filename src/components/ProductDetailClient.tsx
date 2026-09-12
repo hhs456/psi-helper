@@ -27,7 +27,7 @@ import {
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useProductDetail } from "@/lib/hooks";
 import { useSortableList } from "@/lib/useSortableList";
 import { usePin } from "@/lib/usePin";
@@ -618,7 +618,7 @@ export function ProductDetailClient() {
                       <div className="p-3">
                         <SortableContext
                           items={sizeVariants.map((v) => v.id)}
-                          strategy={verticalListSortingStrategy}
+                          strategy={rectSortingStrategy}
                         >
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                             {sizeVariants.map((variant) => (

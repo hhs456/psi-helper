@@ -5,7 +5,7 @@ import { ProductCard } from "@/components/ui/ProductCard";
 import { Package, Search, Loader2, ArrowUpDown } from "lucide-react";
 import { useInventory } from "@/lib/hooks";
 
-type SortOption = "default" | "stock-asc" | "stock-desc" | "out-of-stock" | "variants-desc" | "variants-asc";
+type SortOption = "default" | "stock-asc" | "stock-desc" | "variants-desc" | "variants-asc";
 
 export function HomeClient() {
   const { inventory, isLoading, error } = useInventory();
@@ -13,6 +13,7 @@ export function HomeClient() {
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [minStock, setMinStock] = useState("");
   const [maxStock, setMaxStock] = useState("");
+  const [showPartialOutOfStock, setShowPartialOutOfStock] = useState(false);
 
   const getStock = (item: typeof inventory[0]) =>
     item.variants.reduce((sum, v) => sum + v.available, 0);
@@ -36,6 +37,12 @@ export function HomeClient() {
       const stock = getStock(item);
       if (minStock !== "" && stock < Number(minStock)) return false;
       if (maxStock !== "" && stock > Number(maxStock)) return false;
+
+      if (showPartialOutOfStock) {
+        const hasOutOfStockVariant = item.variants.some((v) => v.available === 0);
+        if (!hasOutOfStockVariant) return false;
+      }
+
       return true;
     });
 
@@ -46,15 +53,6 @@ export function HomeClient() {
       case "stock-desc":
         result.sort((a, b) => getStock(b) - getStock(a));
         break;
-      case "out-of-stock":
-        result.sort((a, b) => {
-          const stockA = getStock(a);
-          const stockB = getStock(b);
-          if (stockA === 0 && stockB > 0) return -1;
-          if (stockA > 0 && stockB === 0) return 1;
-          return getStock(b) - getStock(a);
-        });
-        break;
       case "variants-desc":
         result.sort((a, b) => b.variants.length - a.variants.length);
         break;
@@ -63,7 +61,7 @@ export function HomeClient() {
         break;
     }
     return result;
-  }, [inventory, searchQuery, sortBy, minStock, maxStock]);
+  }, [inventory, searchQuery, sortBy, minStock, maxStock, showPartialOutOfStock]);
 
   const setQuickFilter = (filter: string) => {
     switch (filter) {
@@ -153,7 +151,6 @@ export function HomeClient() {
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="default">預設排序</option>
-            <option value="out-of-stock">無庫存</option>
             <option value="stock-asc">庫存：低 → 高</option>
             <option value="stock-desc">庫存：高 → 低</option>
             <option value="variants-desc">品項：多 → 少</option>
@@ -233,6 +230,22 @@ export function HomeClient() {
           >
             11+
           </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPartialOutOfStock(!showPartialOutOfStock)}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
+              showPartialOutOfStock ? "bg-orange-500" : "bg-gray-200"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                showPartialOutOfStock ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-sm text-gray-600">僅顯示部分品項無庫存</span>
         </div>
       </div>
 

@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
 import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, Search, Loader2, Package } from "lucide-react";
 import { DndContext, closestCorners, DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useSuppliers } from "@/lib/hooks";
 import type { SupplierWithStats } from "@/lib/hooks";
 import { useSortableList } from "@/lib/useSortableList";
@@ -261,7 +261,7 @@ export function SuppliersClient() {
         >
           <SortableContext
             items={filteredSuppliers.map((s) => s.id)}
-            strategy={verticalListSortingStrategy}
+            strategy={rectSortingStrategy}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredSuppliers.map((supplier) => (

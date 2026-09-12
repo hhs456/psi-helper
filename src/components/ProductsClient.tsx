@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, Search, Loader2 } from "lucide-react";
 import { DndContext, closestCorners, DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useProducts } from "@/lib/hooks";
 import { useSortableList } from "@/lib/useSortableList";
 import { usePin } from "@/lib/usePin";
@@ -206,7 +206,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
         >
           <SortableContext
             items={filteredProducts.map((p) => p.id)}
-            strategy={verticalListSortingStrategy}
+            strategy={rectSortingStrategy}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredProducts.map((product) => (
