@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { useImageUpload } from "@/lib/useImageUpload";
 import {
   ArrowLeft,
   Edit2,
@@ -17,7 +18,6 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { compressImage } from "@/lib/image";
 import type { Supplier, Product } from "@/types";
 
 interface ProductWithVariants extends Product {
@@ -43,10 +43,9 @@ export default function SupplierDetailPage() {
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
   const [productForm, setProductForm] = useState({ name: "", code: "", notes: "" });
-  const [productImageFile, setProductImageFile] = useState<File | null>(null);
-  const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
   const [isProductEdit, setIsProductEdit] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl } = useImageUpload();
 
   useEffect(() => {
     if (supplierId) {
@@ -134,8 +133,7 @@ export default function SupplierDetailPage() {
 
   function openAddProductModal() {
     setProductForm({ name: "", code: "", notes: "" });
-    setProductImageFile(null);
-    setProductImagePreview(null);
+    clearImage();
     setIsProductEdit(false);
     setEditingProductId(null);
     setIsAddProductModalOpen(true);
@@ -144,65 +142,18 @@ export default function SupplierDetailPage() {
   function closeAddProductModal() {
     setIsAddProductModalOpen(false);
     setProductForm({ name: "", code: "", notes: "" });
-    setProductImageFile(null);
-    setProductImagePreview(null);
+    clearImage();
     setIsProductEdit(false);
     setEditingProductId(null);
-  }
-
-  function handleProductImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProductImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProductImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
-  async function uploadProductImage(): Promise<string | null> {
-    if (!productImageFile) return null;
-
-    const supabase = createClient();
-
-    let fileToUpload: Blob = productImageFile;
-    try {
-      fileToUpload = await compressImage(productImageFile, {
-        maxWidth: 1200,
-        maxHeight: 1200,
-        quality: 0.8,
-      });
-    } catch (err) {
-      console.warn("Image compression failed, using original:", err);
-    }
-
-    const fileName = `${Date.now()}.jpg`;
-    const filePath = `${fileName}`;
-
-    const { error } = await supabase.storage
-      .from("product-images")
-      .upload(filePath, fileToUpload, {
-        contentType: "image/jpeg",
-      });
-
-    if (error) {
-      alert("圖片上傳失敗：" + error.message);
-      return null;
-    }
-
-    const { data } = supabase.storage.from("product-images").getPublicUrl(filePath);
-    return data.publicUrl;
   }
 
   async function handleAddProduct(e: React.FormEvent) {
     e.preventDefault();
     const supabase = createClient();
 
-    let imageUrl = productImagePreview;
-    if (productImageFile) {
-      const uploadedUrl = await uploadProductImage();
+    let imageUrl = imagePreview;
+    if (imageFile) {
+      const uploadedUrl = await uploadImage();
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
@@ -231,8 +182,7 @@ export default function SupplierDetailPage() {
       code: product.code || "",
       notes: product.notes || "",
     });
-    setProductImagePreview(product.image_url || null);
-    setProductImageFile(null);
+    setImagePreviewFromUrl(product.image_url || null);
     setIsProductEdit(true);
     setEditingProductId(product.id);
     setIsAddProductModalOpen(true);
@@ -243,9 +193,9 @@ export default function SupplierDetailPage() {
     if (!editingProductId) return;
     const supabase = createClient();
 
-    let imageUrl = productImagePreview;
-    if (productImageFile) {
-      const uploadedUrl = await uploadProductImage();
+    let imageUrl = imagePreview;
+    if (imageFile) {
+      const uploadedUrl = await uploadImage();
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
@@ -479,19 +429,16 @@ export default function SupplierDetailPage() {
               商品圖片
             </label>
             <div className="flex items-center gap-4">
-              {productImagePreview && (
+              {imagePreview && (
                 <div className="relative">
                   <img
-                    src={productImagePreview}
+                    src={imagePreview}
                     alt="Preview"
                     className="w-20 h-20 object-cover rounded-lg"
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      setProductImagePreview(null);
-                      setProductImageFile(null);
-                    }}
+                    onClick={clearImage}
                     className="absolute -top-2 -right-2 p-1 bg-white rounded-full shadow-md hover:bg-gray-100"
                   >
                     <X size={14} />
@@ -501,7 +448,7 @@ export default function SupplierDetailPage() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleProductImageChange}
+                onChange={handleImageChange}
                 className="text-sm"
               />
             </div>

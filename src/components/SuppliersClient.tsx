@@ -3,32 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, GripVertical, Search, Loader2 } from "lucide-react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
+import { Plus, Edit2, Trash2, Warehouse, Pin, PinOff, Search, Loader2 } from "lucide-react";
+import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSuppliers } from "@/lib/hooks";
+import { useSortableList } from "@/lib/useSortableList";
+import { usePin } from "@/lib/usePin";
 import type { Supplier } from "@/types";
 
-function SortableSupplierCard({
+function SupplierCard({
   supplier,
   onPin,
   onEdit,
@@ -39,39 +26,12 @@ function SortableSupplierCard({
   onEdit: (supplier: Supplier) => void;
   onDelete: (id: string) => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: supplier.id,
-    data: { isPinned: supplier.is_pinned },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
   return (
-    <Card
-      ref={setNodeRef}
-      style={style}
-      className={`p-4 ${supplier.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
-    >
+    <SortableCard id={supplier.id} isPinned={supplier.is_pinned} className="p-4">
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-2 flex-1">
-          <div
-            className="cursor-grab active:cursor-grabbing p-1 -ml-1 mt-0.5 text-gray-400 hover:text-gray-600 touch-none"
-            title="拖曳排序"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical size={16} />
+          <div className="mt-0.5">
+            <DragHandle className="-ml-1 p-1" />
           </div>
           <div>
             <Link href={`/suppliers/${supplier.id}`}>
@@ -111,7 +71,7 @@ function SortableSupplierCard({
           </button>
         </div>
       </div>
-    </Card>
+    </SortableCard>
   );
 }
 
@@ -122,16 +82,22 @@ export function SuppliersClient() {
   const [formData, setFormData] = useState({ name: "", contact: "", notes: "" });
   const [searchQuery, setSearchQuery] = useState("");
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
+    items: suppliers,
+    tableName: "suppliers",
+    onReorder: (newSuppliers) => mutate(newSuppliers, { revalidate: false }),
+    revalidate: mutate,
+  });
+
+  const { handlePin } = usePin({
+    items: suppliers,
+    tableName: "suppliers",
+    onUpdate: (newSuppliers) => mutate(newSuppliers, { revalidate: false }),
+  });
+
+  async function handleDragEnd(event: DragEndEvent) {
+    await handleSortableDragEnd(event);
+  }
 
   if (isLoading) {
     return (
@@ -211,72 +177,6 @@ export function SuppliersClient() {
     await mutate();
   }
 
-  async function handlePin(id: string, currentIsPinned: boolean) {
-    const supabase = createClient();
-
-    const updateData: Record<string, boolean | number> = {
-      is_pinned: !currentIsPinned,
-    };
-    if (!currentIsPinned) {
-      const maxOrder = Math.max(...suppliers.map((s) => s.sort_order), 0);
-      updateData.sort_order = maxOrder + 1;
-    }
-
-    const { error } = await supabase
-      .from("suppliers")
-      .update(updateData)
-      .eq("id", id);
-
-    if (error) {
-      alert("操作失敗：" + error.message);
-      return;
-    }
-
-    await mutate();
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-
-    if (!over || active.id === over.id) return;
-
-    const activeItem = suppliers.find((s) => s.id === active.id);
-    const overItem = suppliers.find((s) => s.id === over.id);
-
-    if (!activeItem || !overItem) return;
-
-    if (activeItem.is_pinned !== overItem.is_pinned) return;
-
-    const oldIndex = suppliers.findIndex((s) => s.id === active.id);
-    const newIndex = suppliers.findIndex((s) => s.id === over.id);
-
-    const newSuppliers = arrayMove(suppliers, oldIndex, newIndex);
-
-    // Optimistic update: update UI immediately
-    mutate(newSuppliers, { revalidate: false });
-
-    const supabase = createClient();
-    const pinnedGroup = newSuppliers.filter((s) => s.is_pinned);
-    const unpinnedGroup = newSuppliers.filter((s) => !s.is_pinned);
-
-    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
-      id: item.id,
-      sort_order: newSuppliers.length - idx,
-    }));
-
-    const { error } = await supabase.rpc("batch_update_sort_order", {
-      p_table_name: "suppliers",
-      p_items: updates,
-    });
-
-    if (error) {
-      console.error("排序更新失敗:", error);
-    }
-
-    // Revalidate from server
-    await mutate();
-  }
-
   const filteredSuppliers = suppliers.filter((supplier) => {
     const query = searchQuery.toLowerCase();
     return supplier.name.toLowerCase().includes(query);
@@ -324,7 +224,7 @@ export function SuppliersClient() {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredSuppliers.map((supplier) => (
-                <SortableSupplierCard
+                <SupplierCard
                   key={supplier.id}
                   supplier={supplier}
                   onPin={handlePin}

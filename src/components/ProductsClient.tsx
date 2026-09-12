@@ -5,30 +5,17 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
-import { compressImage } from "@/lib/image";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, GripVertical, Search, Loader2 } from "lucide-react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
+import { Plus, Edit2, Trash2, Package, X, Pin, PinOff, Search, Loader2 } from "lucide-react";
+import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useProducts } from "@/lib/hooks";
+import { useSortableList } from "@/lib/useSortableList";
+import { usePin } from "@/lib/usePin";
+import { useImageUpload } from "@/lib/useImageUpload";
 import { Pagination } from "@/components/ui/Pagination";
 import type { Product, Supplier } from "@/types";
 
@@ -36,7 +23,7 @@ type ProductWithSupplier = Omit<Product, "supplier"> & {
   supplier: Supplier | null;
 };
 
-function SortableProductCard({
+function ProductCard({
   product,
   onPin,
   onEdit,
@@ -47,38 +34,11 @@ function SortableProductCard({
   onEdit: (product: ProductWithSupplier) => void;
   onDelete: (id: string) => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: product.id,
-    data: { isPinned: product.is_pinned },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
   return (
-    <Card
-      ref={setNodeRef}
-      style={style}
-      className={`overflow-hidden ${product.is_pinned ? "ring-2 ring-orange-400 bg-orange-50" : ""}`}
-    >
+    <SortableCard id={product.id} isPinned={product.is_pinned}>
       <div className="flex">
-        <div
-          className="w-8 flex-shrink-0 flex items-center justify-center bg-gray-50 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 hover:bg-gray-100 touch-none"
-          title="拖曳排序"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical size={16} />
+        <div className="w-8 flex-shrink-0 flex items-center justify-center bg-gray-50 hover:bg-gray-100">
+          <DragHandle />
         </div>
         <Link href={`/products/${product.id}`} className="w-20 h-20 flex-shrink-0 bg-gray-100 block relative">
           {product.image_url ? (
@@ -98,9 +58,11 @@ function SortableProductCard({
         <div className="flex-1 p-3">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="font-semibold text-gray-900 text-sm">
-                {product.name}
-              </h3>
+              <Link href={`/products/${product.id}`}>
+                <h3 className="font-semibold text-gray-900 text-sm hover:text-blue-600 transition-colors">
+                  {product.name}
+                </h3>
+              </Link>
               {product.code && (
                 <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
               )}
@@ -138,7 +100,7 @@ function SortableProductCard({
           </div>
         </div>
       </div>
-    </Card>
+    </SortableCard>
   );
 }
 
@@ -154,20 +116,25 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     supplier_id: "",
     notes: "",
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const { imageFile, imagePreview, handleImageChange, uploadImage, clearImage, setImagePreviewFromUrl } = useImageUpload();
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
+    items: products,
+    tableName: "products",
+    onReorder: (newProducts) => mutate({ products: newProducts, suppliers, totalPages }, { revalidate: false }),
+    revalidate: mutate,
+  });
+
+  const { handlePin } = usePin({
+    items: products,
+    tableName: "products",
+    onUpdate: (newProducts) => mutate({ products: newProducts, suppliers, totalPages }, { revalidate: false }),
+  });
+
+  async function handleDragEnd(event: DragEndEvent) {
+    await handleSortableDragEnd(event);
+  }
 
   if (isLoading) {
     return (
@@ -190,13 +157,12 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
         supplier_id: product.supplier_id,
         notes: product.notes || "",
       });
-      setImagePreview(product.image_url);
+      setImagePreviewFromUrl(product.image_url);
     } else {
       setEditingProduct(null);
       setFormData({ name: "", code: "", supplier_id: "", notes: "" });
-      setImagePreview(null);
+      clearImage();
     }
-    setImageFile(null);
     setIsModalOpen(true);
   }
 
@@ -204,54 +170,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     setIsModalOpen(false);
     setEditingProduct(null);
     setFormData({ name: "", code: "", supplier_id: "", notes: "" });
-    setImageFile(null);
-    setImagePreview(null);
-  }
-
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
-  async function uploadImage(): Promise<string | null> {
-    if (!imageFile) return null;
-
-    const supabase = createClient();
-
-    let fileToUpload: Blob = imageFile;
-    try {
-      fileToUpload = await compressImage(imageFile, {
-        maxWidth: 1200,
-        maxHeight: 1200,
-        quality: 0.8,
-      });
-    } catch (err) {
-      console.warn("Image compression failed, using original:", err);
-    }
-
-    const fileName = `${Date.now()}.jpg`;
-    const filePath = `${fileName}`;
-
-    const { error } = await supabase.storage
-      .from("product-images")
-      .upload(filePath, fileToUpload, {
-        contentType: "image/jpeg",
-      });
-
-    if (error) {
-      alert("圖片上傳失敗：" + error.message);
-      return null;
-    }
-
-    const { data } = supabase.storage.from("product-images").getPublicUrl(filePath);
-    return data.publicUrl;
+    clearImage();
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -311,72 +230,6 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     await mutate();
   }
 
-  async function handlePin(id: string, currentIsPinned: boolean) {
-    const supabase = createClient();
-
-    const updateData: Record<string, boolean | number> = {
-      is_pinned: !currentIsPinned,
-    };
-    if (!currentIsPinned) {
-      const maxOrder = Math.max(...products.map((p) => p.sort_order), 0);
-      updateData.sort_order = maxOrder + 1;
-    }
-
-    const { error } = await supabase
-      .from("products")
-      .update(updateData)
-      .eq("id", id);
-
-    if (error) {
-      alert("操作失敗：" + error.message);
-      return;
-    }
-
-    await mutate();
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-
-    if (!over || active.id === over.id) return;
-
-    const activeItem = products.find((p) => p.id === active.id);
-    const overItem = products.find((p) => p.id === over.id);
-
-    if (!activeItem || !overItem) return;
-
-    if (activeItem.is_pinned !== overItem.is_pinned) return;
-
-    const oldIndex = products.findIndex((p) => p.id === active.id);
-    const newIndex = products.findIndex((p) => p.id === over.id);
-
-    const newProducts = arrayMove(products, oldIndex, newIndex);
-
-    // Optimistic update: update UI immediately
-    mutate({ products: newProducts, suppliers, totalPages }, { revalidate: false });
-
-    const supabase = createClient();
-    const pinnedGroup = newProducts.filter((p) => p.is_pinned);
-    const unpinnedGroup = newProducts.filter((p) => !p.is_pinned);
-
-    const updates = [...pinnedGroup, ...unpinnedGroup].map((item, idx) => ({
-      id: item.id,
-      sort_order: newProducts.length - idx,
-    }));
-
-    const { error } = await supabase.rpc("batch_update_sort_order", {
-      p_table_name: "products",
-      p_items: updates,
-    });
-
-    if (error) {
-      console.error("排序更新失敗:", error);
-    }
-
-    // Revalidate from server
-    await mutate();
-  }
-
   const filteredProducts = products.filter((product) => {
     const query = searchQuery.toLowerCase();
     return (
@@ -427,7 +280,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredProducts.map((product) => (
-                <SortableProductCard
+                <ProductCard
                   key={product.id}
                   product={product}
                   onPin={handlePin}
@@ -462,10 +315,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      setImagePreview(null);
-                      setImageFile(null);
-                    }}
+                    onClick={clearImage}
                     className="absolute -top-2 -right-2 p-1 bg-white rounded-full shadow-md hover:bg-gray-100"
                   >
                     <X size={14} />

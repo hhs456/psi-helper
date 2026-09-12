@@ -83,16 +83,22 @@ psi-helper/
 │   │   ├── reports/           # 報表分析
 │   │   └── api/               # API routes
 │   ├── components/            # React 元件
-│   │   ├── ui/                # UI 元件（Button, Card, Modal, Input）
+│   │   ├── ui/                # UI 元件（Button, Card, Modal, Input, SortableCard）
 │   │   ├── Sidebar.tsx        # 側邊欄導航
 │   │   └── PWARegister.tsx    # PWA 註冊
 │   ├── lib/
 │   │   ├── supabase/          # Supabase 客戶端
-│   │   └── image.ts           # 圖片壓縮工具
+│   │   ├── image.ts           # 圖片壓縮工具
+│   │   ├── hooks.ts           # SWR 資料 hooks
+│   │   ├── useSortableList.ts # 拖曳排序 hook
+│   │   ├── usePin.ts          # 釘選功能 hook
+│   │   └── useImageUpload.ts  # 圖片上傳 hook
 │   └── types/                 # TypeScript 型別定義
 ├── public/
 │   ├── manifest.json          # PWA manifest
-│   └── sw.js                  # Service Worker
+│   ├── sw.js                  # Service Worker
+│   ├── icon-192.png           # PWA 圖示
+│   └── icon-512.png           # PWA 圖示
 ├── migrations/                # 資料庫遷移腳本
 ├── supabase/
 │   └── schema.sql             # 資料庫 schema
