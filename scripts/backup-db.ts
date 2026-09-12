@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
+import { config } from 'dotenv'
 import { writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 
 if (existsSync('.env.local')) {
-  const { config } = await import('dotenv')
   config({ path: '.env.local', override: false })
 }
 
