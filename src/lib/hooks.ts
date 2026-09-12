@@ -2,6 +2,12 @@ import useSWR from "swr";
 import { createClient } from "@/lib/supabase/browser";
 import type { Product, Supplier, InventorySummary, ColorVariant } from "@/types";
 
+const swrOptions = {
+  revalidateOnFocus: true,
+  revalidateIfStale: true,
+  dedupingInterval: 2000,
+};
+
 type ProductWithSupplier = Omit<Product, "supplier"> & {
   supplier: Supplier | null;
 };
@@ -62,11 +68,7 @@ export function useInventory() {
     return Object.values(grouped) as InventorySummary[];
   };
 
-  const { data, error, isLoading, mutate } = useSWR("inventory", fetcher, {
-    revalidateOnFocus: false,
-    revalidateIfStale: false,
-    dedupingInterval: 60000,
-  });
+  const { data, error, isLoading, mutate } = useSWR("inventory", fetcher, swrOptions);
 
   return {
     inventory: data || [],
@@ -90,11 +92,7 @@ export function useSuppliers() {
     return (data || []) as Supplier[];
   };
 
-  const { data, error, isLoading, mutate } = useSWR("suppliers", fetcher, {
-    revalidateOnFocus: false,
-    revalidateIfStale: false,
-    dedupingInterval: 60000,
-  });
+  const { data, error, isLoading, mutate } = useSWR("suppliers", fetcher, swrOptions);
 
   return {
     suppliers: data || [],
@@ -141,11 +139,7 @@ export function useProductDetail(productId: string) {
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     productId ? ["product-detail", productId] : null,
     fetcher,
-    {
-      revalidateOnFocus: false,
-      revalidateIfStale: false,
-      dedupingInterval: 60000,
-    }
+    swrOptions
   );
 
   return {
@@ -195,11 +189,7 @@ export function useProducts(page: number = 1, pageSize: number = 20) {
     };
   };
 
-  const { data, error, isLoading, mutate } = useSWR(["products", page, pageSize], fetcher, {
-    revalidateOnFocus: false,
-    revalidateIfStale: false,
-    dedupingInterval: 60000,
-  });
+  const { data, error, isLoading, mutate } = useSWR(["products", page, pageSize], fetcher, swrOptions);
 
   return {
     products: data?.products || [],
