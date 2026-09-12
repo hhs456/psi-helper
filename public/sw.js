@@ -1,4 +1,4 @@
-const CACHE_NAME = 'psi-helper-v1';
+const CACHE_NAME = 'psi-helper-v3';
 const urlsToCache = [
   '/',
   '/manifest.json',
@@ -7,6 +7,7 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(urlsToCache);
@@ -34,4 +35,5 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  self.clients.claim();
 });

@@ -5,6 +5,30 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.12.0] - 2026-09-12
+
+### 修復
+
+- **新增顏色時尺寸欄位鎖定**：從尺寸群組新增顏色時，尺寸欄位現在顯示為唯讀，避免使用者誤改
+- **新增尺寸時顏色必填**：顏色欄位改為必填，避免建立無顏色的款式導致 UI 不顯示
+- **PWA 圖示顯示問題**：新增專門的 maskable 圖示，解決 Android 上「圓圈內有方形」的顯示問題
+
+### 改進
+
+- **整合款式 Modal**：將「新增尺寸」、「新增顏色」、「編輯款式」三個 Modal 整合為統一的 `VariantFormModal` 元件
+  - 統一欄位順序：尺寸 → 顏色
+  - 統一尺寸輸入方式：使用下拉選單
+  - 統一標題格式與按鈕文字
+- **專有名詞表**：新增 `docs/GLOSSARY.md`，定義專案術語確保溝通一致
+
+### 新增檔案
+
+- `src/components/ui/VariantFormModal.tsx` - 通用款式表單 Modal 元件
+- `docs/GLOSSARY.md` - 專有名詞表
+- `public/icon-maskable.svg` - Maskable PWA 圖示（SVG 原始檔）
+- `public/icon-maskable-192.png` - Maskable PWA 圖示（192x192）
+- `public/icon-maskable-512.png` - Maskable PWA 圖示（512x512）
+
 ## [0.11.1] - 2026-09-12
 
 ### 修復

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SortableCard, DragHandle } from "@/components/ui/SortableCard";
+import { VariantFormModal, VariantFormMode } from "@/components/ui/VariantFormModal";
 import {
   ArrowLeft,
   Plus,
@@ -131,17 +132,12 @@ export function ProductDetailClient() {
   }, [fetchedVariants]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const [isAddColorModalOpen, setIsAddColorModalOpen] = useState(false);
-  const [isAddSizeModalOpen, setIsAddSizeModalOpen] = useState(false);
-  const [isEditVariantModalOpen, setIsEditVariantModalOpen] = useState(false);
+  const [variantModalMode, setVariantModalMode] = useState<VariantFormMode | null>(null);
+  const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ColorVariant | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [editingVariant, setEditingVariant] = useState<ColorVariant | null>(null);
-
-  const [colorForm, setColorForm] = useState({ color: "", size: "" });
-  const [sizeForm, setSizeForm] = useState({ size: "", color: "" });
-  const [editForm, setEditForm] = useState({ color: "", size: "" });
   const [logForm, setLogForm] = useState({
     type: "purchase" as "purchase" | "defect" | "sale",
     quantity: 0,
@@ -187,8 +183,6 @@ export function ProductDetailClient() {
       return a.localeCompare(b, "zh-Hant-TW");
     });
   }, [variantsBySize]);
-
-  const availableSizes = ["XS", "S", "M", "L", "XL", "2L", "3L", "4L", "均碼"];
 
   const totalStats = useMemo(() => {
     return {
@@ -272,76 +266,68 @@ export function ProductDetailClient() {
     });
   }
 
-  async function addColor(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleVariantSubmit(data: { color: string; size: string }) {
     if (!product) return;
     const supabase = createClient();
 
     const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
 
-    const { data, error } = await supabase
-      .from("color_variants")
-      .insert([
-        {
-          product_id: product.id,
-          color: colorForm.color,
-          size: colorForm.size || null,
-          sort_order: maxOrder + 1,
-        },
-      ])
-      .select()
-      .single();
+    if (variantModalMode === "add-color" || variantModalMode === "add-size") {
+      const sizeValue = data.size === "均碼" ? null : data.size;
 
-    if (error) {
-      alert("新增失敗：" + error.message);
-      return;
-    }
-
-    if (data) {
-      setVariants([...variants, data]);
-    }
-
-    setColorForm({ color: "", size: "" });
-    setIsAddColorModalOpen(false);
-    setSelectedSize(null);
-  }
-
-  async function addSize(e: React.FormEvent) {
-    e.preventDefault();
-    if (!product) return;
-    const supabase = createClient();
-
-    const maxOrder = Math.max(...variants.map((v) => v.sort_order), 0);
-
-    const insertData: { product_id: string; color: string; size: string | null; sort_order: number }[] = [];
-
-    if (sizeForm.color) {
-      insertData.push({
-        product_id: product.id,
-        color: sizeForm.color,
-        size: sizeForm.size || null,
-        sort_order: maxOrder + 1,
-      });
-    }
-
-    if (insertData.length > 0) {
-      const { data, error } = await supabase
+      const { data: newData, error } = await supabase
         .from("color_variants")
-        .insert(insertData)
-        .select();
+        .insert([
+          {
+            product_id: product.id,
+            color: data.color,
+            size: sizeValue,
+            sort_order: maxOrder + 1,
+          },
+        ])
+        .select()
+        .single();
 
       if (error) {
         alert("新增失敗：" + error.message);
         return;
       }
 
-      if (data) {
-        setVariants([...variants, ...data]);
+      if (newData) {
+        setVariants([...variants, newData]);
       }
-    }
 
-    setSizeForm({ size: "", color: "" });
-    setIsAddSizeModalOpen(false);
+      setIsVariantModalOpen(false);
+      setVariantModalMode(null);
+      setSelectedSize(null);
+    } else if (variantModalMode === "edit" && editingVariant) {
+      const sizeValue = data.size === "均碼" ? null : data.size;
+
+      const { error } = await supabase
+        .from("color_variants")
+        .update({
+          color: data.color,
+          size: sizeValue,
+        })
+        .eq("id", editingVariant.id);
+
+      if (error) {
+        alert("更新失敗：" + error.message);
+        return;
+      }
+
+      setVariants(
+        variants.map((v) =>
+          v.id === editingVariant.id
+            ? { ...v, color: data.color, size: sizeValue }
+            : v
+        )
+      );
+
+      setIsVariantModalOpen(false);
+      setVariantModalMode(null);
+      setEditingVariant(null);
+    }
   }
 
   async function addStockLog(e: React.FormEvent) {
@@ -492,38 +478,6 @@ export function ProductDetailClient() {
     }
   }
 
-  async function editVariant(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editingVariant) return;
-
-    const supabase = createClient();
-
-    const { error } = await supabase
-      .from("color_variants")
-      .update({
-        color: editForm.color,
-        size: editForm.size || null,
-      })
-      .eq("id", editingVariant.id);
-
-    if (error) {
-      alert("更新失敗：" + error.message);
-      return;
-    }
-
-    setVariants(
-      variants.map((v) =>
-        v.id === editingVariant.id
-          ? { ...v, color: editForm.color, size: editForm.size || null }
-          : v
-      )
-    );
-
-    setEditingVariant(null);
-    setEditForm({ color: "", size: "" });
-    setIsEditVariantModalOpen(false);
-  }
-
   async function deleteVariant(variantId: string) {
     if (!confirm("確定要刪除此款式嗎？相關的庫存記錄也會一併刪除。")) return;
 
@@ -608,7 +562,10 @@ export function ProductDetailClient() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">款式</h2>
-          <Button size="sm" onClick={() => setIsAddSizeModalOpen(true)}>
+          <Button size="sm" onClick={() => {
+            setVariantModalMode("add-size");
+            setIsVariantModalOpen(true);
+          }}>
             <Plus size={16} className="mr-1" />
             新增尺寸
           </Button>
@@ -675,11 +632,8 @@ export function ProductDetailClient() {
                                 }}
                                 onEdit={(v) => {
                                   setEditingVariant(v);
-                                  setEditForm({
-                                    color: v.color,
-                                    size: v.size || "",
-                                  });
-                                  setIsEditVariantModalOpen(true);
+                                  setVariantModalMode("edit");
+                                  setIsVariantModalOpen(true);
                                 }}
                                 onDelete={deleteVariant}
                               />
@@ -690,8 +644,8 @@ export function ProductDetailClient() {
                           type="button"
                           onClick={() => {
                             setSelectedSize(size);
-                            setColorForm({ color: "", size: size === "均碼" ? "" : size });
-                            setIsAddColorModalOpen(true);
+                            setVariantModalMode("add-color");
+                            setIsVariantModalOpen(true);
                           }}
                           className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 transition-colors"
                         >
@@ -798,136 +752,26 @@ export function ProductDetailClient() {
         )}
       </div>
 
-      <Modal
-        isOpen={isAddColorModalOpen}
+      <VariantFormModal
+        key={`${variantModalMode}-${editingVariant?.id || ""}-${selectedSize || ""}`}
+        mode={variantModalMode || "add-size"}
+        isOpen={isVariantModalOpen}
         onClose={() => {
-          setIsAddColorModalOpen(false);
+          setIsVariantModalOpen(false);
+          setVariantModalMode(null);
           setSelectedSize(null);
-          setColorForm({ color: "", size: "" });
-        }}
-        title={`新增顏色${selectedSize ? ` - 尺寸：${selectedSize}` : ""}`}
-      >
-        <form onSubmit={addColor} className="space-y-4">
-          <Input
-            label="顏色"
-            value={colorForm.color}
-            onChange={(e) =>
-              setColorForm({ ...colorForm, color: e.target.value })
-            }
-            required
-          />
-          <Input
-            label="尺寸"
-            value={colorForm.size}
-            onChange={(e) =>
-              setColorForm({ ...colorForm, size: e.target.value })
-            }
-            placeholder="例如：S、M、L、均碼"
-          />
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsAddColorModalOpen(false);
-                setSelectedSize(null);
-                setColorForm({ color: "", size: "" });
-              }}
-            >
-              取消
-            </Button>
-            <Button type="submit">新增</Button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={isAddSizeModalOpen}
-        onClose={() => {
-          setIsAddSizeModalOpen(false);
-          setSizeForm({ size: "", color: "" });
-        }}
-        title="新增尺寸"
-      >
-        <form onSubmit={addSize} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              尺寸
-            </label>
-            <select
-              value={sizeForm.size}
-              onChange={(e) => setSizeForm({ ...sizeForm, size: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            >
-              <option value="">選擇尺寸</option>
-              {availableSizes.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Input
-            label="顏色（選填，可後續新增）"
-            value={sizeForm.color}
-            onChange={(e) => setSizeForm({ ...sizeForm, color: e.target.value })}
-            placeholder="例如：紅色、藍色"
-          />
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsAddSizeModalOpen(false);
-                setSizeForm({ size: "", color: "" });
-              }}
-            >
-              取消
-            </Button>
-            <Button type="submit">新增</Button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={isEditVariantModalOpen}
-        onClose={() => {
-          setIsEditVariantModalOpen(false);
           setEditingVariant(null);
-          setEditForm({ color: "", size: "" });
         }}
-        title="編輯款式"
-      >
-        <form onSubmit={editVariant} className="space-y-4">
-          <Input
-            label="顏色"
-            value={editForm.color}
-            onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
-            required
-          />
-          <Input
-            label="尺寸"
-            value={editForm.size}
-            onChange={(e) => setEditForm({ ...editForm, size: e.target.value })}
-            placeholder="例如：S、M、L、均碼"
-          />
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsEditVariantModalOpen(false);
-                setEditingVariant(null);
-                setEditForm({ color: "", size: "" });
-              }}
-            >
-              取消
-            </Button>
-            <Button type="submit">更新</Button>
-          </div>
-        </form>
-      </Modal>
+        onSubmit={handleVariantSubmit}
+        initialValues={
+          variantModalMode === "edit" && editingVariant
+            ? { color: editingVariant.color, size: editingVariant.size || "均碼" }
+            : variantModalMode === "add-color" && selectedSize
+            ? { color: "", size: selectedSize }
+            : { color: "", size: "" }
+        }
+        lockedSize={variantModalMode === "add-color" ? selectedSize : null}
+      />
 
       <Modal
         isOpen={isLogModalOpen}
