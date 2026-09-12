@@ -290,6 +290,7 @@ export function useProducts(page: number = 1, pageSize: number = 20, filters: Pr
       suppliers: (suppliersRes.data || []) as Supplier[],
       totalPages,
       allProducts,
+      rawAllProducts: (productsRes.data || []) as ProductWithSupplierAndVariants[],
     };
   };
 
@@ -300,6 +301,7 @@ export function useProducts(page: number = 1, pageSize: number = 20, filters: Pr
     suppliers: data?.suppliers || [],
     totalPages: data?.totalPages || 1,
     allProducts: data?.allProducts || [],
+    rawAllProducts: data?.rawAllProducts || [],
     isLoading,
     error,
     mutate,

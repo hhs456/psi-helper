@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -31,10 +31,11 @@ type ProductWithSupplier = Omit<Product, "supplier"> & {
 
 export function ProductsClient({ pageSize }: { pageSize: number }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const currentPage = parseInt(searchParams.get("page") || "1");
   const [searchQuery, setSearchQuery] = useState("");
   const [productFilter, setProductFilter] = useState<ProductFilter>("all");
-  const { products, suppliers, totalPages, allProducts, isLoading, error, mutate } = useProducts(currentPage, pageSize, {
+  const { products, suppliers, totalPages, allProducts, rawAllProducts, isLoading, error, mutate } = useProducts(currentPage, pageSize, {
     searchQuery,
     productFilter,
   });
@@ -51,14 +52,14 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
   const { sensors, handleDragEnd: handleSortableDragEnd } = useSortableList({
     items: products,
     tableName: "products",
-    onReorder: (newProducts) => mutate({ products: newProducts, suppliers, totalPages, allProducts }, { revalidate: false }),
+    onReorder: (newProducts) => mutate({ products: newProducts, suppliers, totalPages, allProducts, rawAllProducts }, { revalidate: false }),
     revalidate: mutate,
   });
 
   const { handlePin } = usePin({
     items: products,
     tableName: "products",
-    onUpdate: (newProducts) => mutate({ products: newProducts, suppliers, totalPages, allProducts }, { revalidate: false }),
+    onUpdate: (newProducts) => mutate({ products: newProducts, suppliers, totalPages, allProducts, rawAllProducts }, { revalidate: false }),
   });
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -71,7 +72,7 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     let noImage = 0;
     let noVariants = 0;
 
-    allProducts.forEach((product) => {
+    rawAllProducts.forEach((product) => {
       if (!product.image_url) noImage++;
       if (!product.variants || product.variants.length === 0) {
         noVariants++;
@@ -90,7 +91,18 @@ export function ProductsClient({ pageSize }: { pageSize: number }) {
     });
 
     return { noStock, partial, noImage, noVariants };
-  }, [allProducts]);
+  }, [rawAllProducts]);
+
+  const prevFilterRef = useRef({ searchQuery, productFilter });
+  useEffect(() => {
+    const prev = prevFilterRef.current;
+    if (prev.searchQuery !== searchQuery || prev.productFilter !== productFilter) {
+      prevFilterRef.current = { searchQuery, productFilter };
+      if (currentPage > 1) {
+        router.replace("/products?page=1");
+      }
+    }
+  }, [searchQuery, productFilter, currentPage, router]);
 
   if (isLoading) {
     return (

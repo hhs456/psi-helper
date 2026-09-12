@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { PSICard } from "@/components/ui/PSICard";
 import { Pagination } from "@/components/ui/Pagination";
 import { Package, Search, Loader2, ArrowUpDown, Filter } from "lucide-react";
@@ -9,6 +9,7 @@ import { usePSI, useSuppliers, PSISortOption } from "@/lib/hooks";
 
 export function PSIClient({ pageSize }: { pageSize: number }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const currentPage = parseInt(searchParams.get("page") || "1");
   const { suppliers } = useSuppliers();
   const [searchQuery, setSearchQuery] = useState("");
@@ -20,6 +21,17 @@ export function PSIClient({ pageSize }: { pageSize: number }) {
     supplierName: selectedSupplier,
     sortBy,
   });
+
+  const prevFilterRef = useRef({ searchQuery, selectedSupplier, sortBy });
+  useEffect(() => {
+    const prev = prevFilterRef.current;
+    if (prev.searchQuery !== searchQuery || prev.selectedSupplier !== selectedSupplier || prev.sortBy !== sortBy) {
+      prevFilterRef.current = { searchQuery, selectedSupplier, sortBy };
+      if (currentPage > 1) {
+        router.replace("/psi?page=1");
+      }
+    }
+  }, [searchQuery, selectedSupplier, sortBy, currentPage, router]);
 
   if (isLoading) {
     return (

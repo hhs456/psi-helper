@@ -5,6 +5,33 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.21.0] - 2026-09-12
+
+### 改進
+
+- **側邊欄可收合**：新增側邊欄收合/展開功能，預設在平板尺寸（< 1024px）收合為圖示模式
+  - 桌面版可點擊側邊欄右側的箭頭按鈕切換收合狀態
+  - 收合狀態透過 localStorage 持久化，重新整理後保留偏好
+  - 主內容區域寬度會跟隨側邊欄寬度自動調整
+  - 收合時顯示圖示，展開時顯示完整文字標籤
+
+### 修復
+
+- **篩選標籤數字不正確**：修復篩選標籤旁的統計數字受當前篩選條件影響的問題
+  - `useProducts` hook 新增回傳 `rawAllProducts`（未篩選的完整商品列表）
+  - `filterStats` 改從 `rawAllProducts` 計算，確保數字反映全部資料
+- **篩選後分頁超出範圍**：修復在第 2 頁之後切換篩選條件時，因結果數量不足而顯示空白頁的問題
+  - 商品管理和進銷明細頁面現在偵測篩選/搜尋/排序條件改變時，自動重置頁碼到第 1 頁
+
+### 修改檔案
+
+- `src/components/Sidebar.tsx` - 新增收合功能、CSS variable 同步
+- `src/app/layout.tsx` - 主內容區域改用 CSS variable 控制 margin
+- `src/app/globals.css` - 新增 `--sidebar-width` CSS variable
+- `src/lib/hooks.ts` - `useProducts` 新增 `rawAllProducts` 回傳值
+- `src/components/ProductsClient.tsx` - 使用 `rawAllProducts` 計算篩選統計 + 篩選改變時重置頁碼
+- `src/components/PSIClient.tsx` - 篩選/搜尋/排序改變時重置頁碼
+
 ## [0.20.0] - 2026-09-12
 
 ### 改進
