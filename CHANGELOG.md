@@ -5,6 +5,19 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.17.3] - 2026-09-14
+
+### 改進
+
+- **備份包含圖片**：自動備份現在會下載並打包所有商品圖片
+  - 備份格式改為 tar.gz，包含 JSON 和 images 目錄
+  - GitHub Release 上傳完整的備份壓縮檔
+
+### 修改檔案
+
+- `scripts/backup-db.ts` - 新增圖片下載功能
+- `.github/workflows/backup.yml` - 新增打包步驟
+
 ## [0.17.2] - 2026-09-12
 
 ### 新增

@@ -32,12 +32,18 @@ jobs:
       - name: Run backup
         run: npx tsx scripts/backup-db.ts
 
+      - name: Create tar.gz archive
+        run: |
+          BACKUP_FILE=$(ls backups/*.json | head -1)
+          BACKUP_NAME=$(basename "$BACKUP_FILE" .json)
+          tar -czf "backups/${BACKUP_NAME}.tar.gz" -C backups "${BACKUP_NAME}.json" images/
+
       - name: Create Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="backup-$(date +%Y%m%d-%H%M%S)"
-          BACKUP_FILE=$(ls backups/*.json | head -1)
+          BACKUP_FILE=$(ls backups/*.tar.gz | head -1)
           
           gh release create "$TAG" \
             "$BACKUP_FILE" \

@@ -5,13 +5,13 @@
 ## 功能特色
 
 - **庫存總覽** - 庫存分析與盤點，支援排序、篩選、統計摘要
+- **進銷明細** - 檢視每個商品規格的進貨、瑕疵、銷售數量，支援分頁和排序
 - **供應商管理** - 記錄進貨工廠/供應商資訊，支援釘選、拖曳排序、搜尋、顯示商品數量和庫存總數
 - **商品管理** - 管理商品資料與圖片，支援釘選、拖曳排序、搜尋、顏色/尺寸庫存顯示
 - **供應商詳情頁** - 檢視供應商資訊及其下所有商品，支援搜尋、釘選、拖曳排序，可直接新增/編輯/刪除商品
 - **庫存追蹤** - 追蹤進貨、瑕疵、銷售數量，支援款式（顏色/尺寸）管理
-- **銷售記錄** - 記錄銷售訂單（支援蝦皮訂單），可編輯、拆單、取消
-- **報表分析** - 庫存統計與銷售分析
 - **PWA 支援** - 可安裝到手機主畫面，像原生 App 一樣使用
+- **自動備份** - 每日自動備份資料庫和圖片至 GitHub Release
 
 ## 技術棧
 
@@ -80,12 +80,12 @@ psi-helper/
 │   │   │   └── [id]/          # 供應商詳情（含商品列表）
 │   │   ├── products/          # 商品管理
 │   │   │   └── [id]/          # 商品詳情（款式/庫存異動）
-│   │   ├── sales/             # 銷售記錄
-│   │   ├── reports/           # 報表分析
+│   │   ├── psi/               # 進銷明細
 │   │   └── api/               # API routes
 │   ├── components/            # React 元件
-│   │   ├── ui/                # UI 元件（Button, Card, Modal, Input, SortableCard）
+│   │   ├── ui/                # UI 元件（Button, Card, Modal, Input, SortableCard, PSICard）
 │   │   ├── Sidebar.tsx        # 側邊欄導航
+│   │   ├── Footer.tsx         # 頁腳
 │   │   └── PWARegister.tsx    # PWA 註冊
 │   ├── lib/
 │   │   ├── supabase/          # Supabase 客戶端
@@ -99,7 +99,13 @@ psi-helper/
 │   ├── manifest.json          # PWA manifest
 │   ├── sw.js                  # Service Worker
 │   ├── icon-192.png           # PWA 圖示
-│   └── icon-512.png           # PWA 圖示
+│   ├── icon-512.png           # PWA 圖示
+│   ├── icon-maskable-192.png  # Maskable PWA 圖示
+│   └── icon-maskable-512.png  # Maskable PWA 圖示
+├── scripts/                   # 工具腳本
+│   ├── backup-db.ts           # 資料庫備份
+│   ├── restore-db.ts          # 資料庫還原
+│   └── cleanup-images.ts      # 清理孤立圖片
 ├── migrations/                # 資料庫遷移腳本
 ├── supabase/
 │   └── schema.sql             # 資料庫 schema
@@ -138,14 +144,6 @@ psi-helper/
 | Vercel | 無限部署、100GB 頻寬/月 | 綽綽有餘 |
 | Supabase DB | 500MB PostgreSQL | 文字資料足夠 |
 | Supabase Storage | 1GB 圖片儲存 | 可存數千張小圖片 |
-
-## 後續發展
-
-- [ ] 蝦皮訂單 CSV 匯入
-- [ ] 利潤計算功能
-- [ ] 庫存報表匯出（Excel/PDF）
-- [ ] 低庫存警示
-- [ ] 多用戶支援
 
 ## License
 
