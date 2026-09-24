@@ -47,9 +47,17 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
 ### 3. 設定 Supabase
 
 1. 前往 [Supabase](https://supabase.com) 建立新專案
-2. 在 SQL Editor 中執行 `supabase/schema.sql` 建立資料庫結構
-3. 在 Storage 中建立 `product-images` bucket（schema.sql 會自動建立）
-4. 複製專案 URL 和 publishable key 到 `.env.local`
+2. 安裝 [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+3. 登入並連結專案：
+   ```bash
+   supabase login
+   supabase link --project-ref <your-project-ref>
+   ```
+4. 推送 migration 建立資料庫結構：
+   ```bash
+   supabase db push
+   ```
+5. 複製專案 URL 和 publishable key 到 `.env.local`
 
 ### 4. 啟動開發伺服器
 
@@ -106,9 +114,10 @@ psi-helper/
 │   ├── backup-db.ts           # 資料庫備份
 │   ├── restore-db.ts          # 資料庫還原
 │   └── cleanup-images.ts      # 清理孤立圖片
-├── migrations/                # 資料庫遷移腳本
+├── migrations/                # 資料庫遷移腳本（舊版）
 ├── supabase/
-│   └── schema.sql             # 資料庫 schema
+│   ├── migrations/            # Supabase CLI migration 檔案
+│   └── schema.sql             # 資料庫 schema（參考用）
 └── .env.local                 # 環境變數（不要提交到 Git）
 ```
 

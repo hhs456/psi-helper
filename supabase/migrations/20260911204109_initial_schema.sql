@@ -162,3 +162,28 @@ drop policy if exists "Allow authenticated users to delete product images" on st
 create policy "Allow authenticated users to delete product images"
   on storage.objects for delete
   using (bucket_id = 'product-images');
+
+-- Grant Data API access to all tables
+grant select on public.suppliers to anon;
+grant select, insert, update, delete on public.suppliers to authenticated;
+grant select, insert, update, delete on public.suppliers to service_role;
+
+grant select on public.products to anon;
+grant select, insert, update, delete on public.products to authenticated;
+grant select, insert, update, delete on public.products to service_role;
+
+grant select on public.color_variants to anon;
+grant select, insert, update, delete on public.color_variants to authenticated;
+grant select, insert, update, delete on public.color_variants to service_role;
+
+grant select on public.stock_logs to anon;
+grant select, insert, update, delete on public.stock_logs to authenticated;
+grant select, insert, update, delete on public.stock_logs to service_role;
+
+grant select on public.sales_orders to anon;
+grant select, insert, update, delete on public.sales_orders to authenticated;
+grant select, insert, update, delete on public.sales_orders to service_role;
+
+grant select on public.sales_items to anon;
+grant select, insert, update, delete on public.sales_items to authenticated;
+grant select, insert, update, delete on public.sales_items to service_role;
