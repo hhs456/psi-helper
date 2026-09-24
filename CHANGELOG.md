@@ -5,6 +5,29 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.17.4] - 2026-09-24
+
+### 新增
+
+- **Supabase CLI migration 追蹤**：啟用 Supabase CLI 的 migration 版本追蹤機制
+  - 重新命名 migration 檔案使用 Git commit timestamps 作為版本號
+  - 新增 migration 授權 Data API 存取現有資料表（配合 Supabase 10/30 政策變更）
+  - 更新 README 和 migrations 文件說明 CLI 設定流程
+
+### 修復
+
+- **備份 cleanup 誤刪最新 Release**：修正 GitHub Actions 備份流程中 cleanup 步驟會刪除最新 Release 的問題
+  - 改用 tag 名稱字串排序取代 `createdAt` 欄位，避免 API eventual consistency 導致新 Release 的 `createdAt` 為 null 而被誤判為最舊
+  - 僅處理 `backup-` 開頭的 tag，排除版本號等非備份 Release
+
+### 修改檔案
+
+- `migrations/` - 重新命名 migration 檔案，新增授權 migration
+- `README.md` - 新增 Supabase CLI 設定說明
+- `migrations/README.md` - 新增 migration 工作流程文件
+- `.github/workflows/backup.yml` - 修正 cleanup 步驟的 jq 排序邏輯
+- `.gitignore` - 新增 `supabase/.temp/`
+
 ## [0.17.3] - 2026-09-14
 
 ### 改進

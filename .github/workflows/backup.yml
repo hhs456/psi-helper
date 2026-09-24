@@ -54,8 +54,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASES=$(gh release list --limit 100 --json tagName,createdAt | \
-            jq -r 'sort_by(.createdAt) | reverse | .[7:] | .[].tagName')
+          # 只用 tagName 做排序（tag 格式為 backup-YYYYMMDD-HHMMSS），避免 createdAt null 問題
+          RELEASES=$(gh release list --limit 100 --json tagName | \
+            jq -r '[.[].tagName] | map(select(startswith("backup-"))) | sort | reverse | .[7:] | .[]')
           
           for TAG in $RELEASES; do
             echo "刪除舊備份: $TAG"
